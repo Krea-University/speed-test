@@ -166,25 +166,25 @@ download_source() {
 run_deployment() {
     log_info "🚀 Starting deployment..."
     
-    # Set environment for non-interactive mode if requested
-    if [[ "${FORCE_NO_TTY}" == "true" ]]; then
-        export DOCKER_NONINTERACTIVE=1
-        export DEBIAN_FRONTEND=noninteractive
-        log_info "🔧 Non-interactive mode enabled globally"
-    fi
+    # Force non-interactive mode globally
+    export DOCKER_NONINTERACTIVE=1
+    export DEBIAN_FRONTEND=noninteractive
+    export FORCE_NO_TTY=true
+    
+    log_info "🔧 Non-interactive mode enabled globally"
     
     # Make scripts executable
     chmod +x deploy.sh deploy-no-tty.sh fix-tty.sh 2>/dev/null || true
     chmod +x prepare-deploy.sh deployment-summary.sh 2>/dev/null || true
     
-    # Choose deployment method based on TTY settings
-    if [[ "${FORCE_NO_TTY}" == "true" && -f "deploy-no-tty.sh" ]]; then
-        log_info "Using deploy-no-tty.sh wrapper..."
+    # Always use deploy-no-tty.sh if available, otherwise force --no-tty
+    if [[ -f "deploy-no-tty.sh" ]]; then
+        log_info "Using deploy-no-tty.sh wrapper (TTY-free)..."
         ./deploy-no-tty.sh "$DOMAIN" "$EMAIL"
     else
-        log_info "Using deploy.sh with flags: ${FLAGS[*]} and args: $DOMAIN $EMAIL"
-        # Pass flags first, then domain and email
-        ./deploy.sh "${FLAGS[@]}" "$DOMAIN" "$EMAIL"
+        log_info "Using deploy.sh with forced --no-tty flag..."
+        # Force --no-tty regardless of input flags
+        ./deploy.sh --no-tty "$DOMAIN" "$EMAIL"
     fi
     
     log_success "✅ Deployment completed successfully!"

@@ -6,6 +6,14 @@
 
 set -e
 
+# Force all non-interactive settings immediately
+export DOCKER_NONINTERACTIVE=1
+export DEBIAN_FRONTEND=noninteractive
+export FORCE_NO_TTY=true
+
+# Redirect stdin to prevent any TTY prompts
+exec < /dev/null
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
