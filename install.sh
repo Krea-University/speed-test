@@ -99,12 +99,8 @@ check_prerequisites() {
     if [[ -n "$DOMAIN_IP" && "$DOMAIN_IP" != "$SERVER_IP" ]]; then
         log_warning "⚠️  Domain $DOMAIN resolves to $DOMAIN_IP but server IP is $SERVER_IP"
         log_warning "⚠️  Make sure your DNS A record points to this server"
-        echo -n "Continue anyway? (y/N): "
-        read -r response
-        if [[ ! "$response" =~ ^[Yy]$ ]]; then
-            log_info "Deployment cancelled. Please update your DNS first."
-            exit 1
-        fi
+        log_warning "⚠️  Continuing with deployment - please verify DNS settings after installation"
+        sleep 2  # Brief pause to ensure user sees the warning
     fi
     
     log_success "✅ Prerequisites check passed"
