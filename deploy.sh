@@ -2,10 +2,11 @@
 
 # Krea Speed Test Server - Docker Production Deployment with Auto-Restart & Daily Backups
 # This script deploys the speed test server using Docker with SSL, auto-restart, and daily MySQL backups
-# Usage: ./deploy.sh [--no-tty] <domain> [email]
+# Usage: ./deploy.sh [--no-tty] [--debug-tty] <domain> [email]
 # 
 # Options:
 #   --no-tty              Force non-interactive mode (disable TTY)
+#   --debug-tty           Enable TTY debugging output
 # 
 # Environment Variables:
 #   DOCKER_NONINTERACTIVE=1 - Force non-interactive mode if TTY detection fails
@@ -30,6 +31,10 @@ while [[ $# -gt 0 ]]; do
             export DOCKER_NONINTERACTIVE=1
             shift
             ;;
+        --debug-tty)
+            export DEBUG_TTY=1
+            shift
+            ;;
         *)
             ARGS+=("$1")
             shift
@@ -52,15 +57,36 @@ MYSQL_DB_PASSWORD=$(openssl rand -base64 32)
 # Functions
 # Docker Compose wrapper for non-interactive environments
 docker_exec() {
-    # Force non-interactive if --no-tty was specified
+    # Debug: Log TTY detection
+    if [[ "${DEBUG_TTY}" == "1" ]]; then
+        log_info "TTY Debug: FORCE_NO_TTY=${FORCE_NO_TTY}, DOCKER_NONINTERACTIVE=${DOCKER_NONINTERACTIVE}"
+        log_info "TTY Debug: stdin tty=$([ -t 0 ] && echo 'yes' || echo 'no'), stdout tty=$([ -t 1 ] && echo 'yes' || echo 'no')"
+    fi
+    
+    # Force non-interactive if --no-tty was specified or environment variable set
     if [[ "${FORCE_NO_TTY}" == "true" ]] || [[ "${DOCKER_NONINTERACTIVE}" == "1" ]]; then
+        [[ "${DEBUG_TTY}" == "1" ]] && log_info "TTY Debug: Using -T flag (forced non-interactive)"
         docker-compose exec -T "$@"
     # Try TTY detection
-    elif [ -t 0 ]; then
+    elif [ -t 0 ] && [ -t 1 ]; then
+        [[ "${DEBUG_TTY}" == "1" ]] && log_info "TTY Debug: Using interactive mode"
         docker-compose exec "$@"
     else
         # Use -T flag for non-interactive mode
+        [[ "${DEBUG_TTY}" == "1" ]] && log_info "TTY Debug: Using -T flag (TTY detection)"
         docker-compose exec -T "$@"
+    fi
+}
+
+# Safe wrapper that catches TTY errors and retries with -T
+docker_exec_with_retry() {
+    local cmd=("$@")
+    
+    # First try with the standard docker_exec function
+    if ! docker_exec "${cmd[@]}" 2>/dev/null; then
+        # If that fails, force -T mode
+        log_warning "Retrying with forced non-interactive mode..."
+        docker-compose exec -T "${cmd[@]}"
     fi
 }
 
@@ -132,9 +158,10 @@ check_root() {
 
 check_domain() {
     if [[ -z "$DOMAIN" ]]; then
-        log_error "Usage: $0 [--no-tty] <domain> [email]"
+        log_error "Usage: $0 [--no-tty] [--debug-tty] <domain> [email]"
         log_error "Example: $0 speedtest.example.com admin@example.com"
         log_error "Example: $0 --no-tty speedtest.example.com admin@example.com"
+        log_error "Example: $0 --debug-tty speedtest.example.com admin@example.com"
         exit 1
     fi
     
@@ -142,6 +169,9 @@ check_domain() {
     log_info "Contact email: $EMAIL"
     if [[ "${FORCE_NO_TTY}" == "true" ]]; then
         log_info "Mode: Non-interactive (--no-tty specified)"
+    fi
+    if [[ "${DEBUG_TTY}" == "1" ]]; then
+        log_info "TTY debugging enabled"
     fi
 }
 
@@ -910,7 +940,7 @@ deploy_services() {
     docker-compose run --rm certbot
     
     # Reload nginx with SSL
-    docker_exec nginx nginx -s reload
+    docker_exec_safe nginx nginx -s reload
     
     # Start backup service
     docker-compose up -d backup
@@ -925,7 +955,7 @@ setup_admin_user() {
     sleep 10
     
     # Insert admin API key into database
-    docker_exec mysql mysql -u speedtest -p"$MYSQL_DB_PASSWORD" speedtest <<EOF
+    docker_exec_safe mysql mysql -u speedtest -p"$MYSQL_DB_PASSWORD" speedtest <<EOF
 INSERT INTO api_keys (api_key, name, is_active, rate_limit_per_hour, created_at, updated_at) 
 VALUES ('$ADMIN_API_KEY', 'admin', 1, 10000, NOW(), NOW()) 
 ON DUPLICATE KEY UPDATE 
@@ -1036,6 +1066,13 @@ EOF
 main() {
     log_info "🚀 Starting Krea Speed Test Server Docker Deployment"
     echo "===================================================="
+    
+    # Ensure non-interactive mode is set globally if --no-tty was used
+    if [[ "${FORCE_NO_TTY}" == "true" ]]; then
+        export DOCKER_NONINTERACTIVE=1
+        export DEBIAN_FRONTEND=noninteractive
+        log_info "🔧 Non-interactive mode enabled globally"
+    fi
     
     check_root
     check_domain
