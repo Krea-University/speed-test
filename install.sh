@@ -1,9 +1,41 @@
 #!/bin/bash
 
 # Krea Speed Test Server - One-Command Installation Script
-# Usage: curl -fsSL https://raw.githubusercontent.com/Krea-University/speed-test-server/main/install.sh | bash -s -- <domain> [email]
+# Usage: curl -fsSL https://raw.githubusercontent.com/Krea-University/speed-test/main/install.sh | bash -s -- [options] <domain> [email]
+# Options: --no-tty, --debug-tty
 
 set -e
+
+# Parse command line arguments
+DEPLOY_ARGS=()
+FORCE_NO_TTY=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --no-tty)
+            FORCE_NO_TTY=true
+            DEPLOY_ARGS+=("$1")
+            shift
+            ;;
+        --debug-tty)
+            DEPLOY_ARGS+=("$1")
+            shift
+            ;;
+        *)
+            DEPLOY_ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# Set positional parameters from remaining args
+set -- "${DEPLOY_ARGS[@]}"
+
+# Configuration
+DOMAIN="$1"
+EMAIL="${2:-admin@${DOMAIN}}"
+REPO_URL="https://github.com/Krea-University/speed-test.git"
+INSTALL_DIR="/tmp/speed-test"
 
 # Colors for output
 RED='\033[0;31m'
@@ -12,12 +44,6 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
-
-# Configuration
-DOMAIN="$1"
-EMAIL="${2:-admin@${DOMAIN}}"
-REPO_URL="https://github.com/Krea-University/speed-test-server.git"
-INSTALL_DIR="/tmp/speed-test-server"
 
 # Functions
 log_info() {
@@ -64,17 +90,21 @@ check_root() {
 
 check_domain() {
     if [[ -z "$DOMAIN" ]]; then
-        log_error "Usage: $0 <domain> [email]"
+        log_error "Usage: $0 [--no-tty] [--debug-tty] <domain> [email]"
         log_error "Example: $0 speedtest.example.com admin@example.com"
+        log_error "Example: $0 --no-tty speedtest.example.com admin@example.com"
         echo ""
         echo -e "${YELLOW}💡 Quick start examples:${NC}"
-        echo "  curl -fsSL https://raw.githubusercontent.com/Krea-University/speed-test-server/main/install.sh | bash -s -- speedtest.yourdomain.com"
-        echo "  curl -fsSL https://raw.githubusercontent.com/Krea-University/speed-test-server/main/install.sh | bash -s -- speedtest.yourdomain.com admin@yourdomain.com"
+        echo "  curl -fsSL https://raw.githubusercontent.com/Krea-University/speed-test/main/install.sh | bash -s -- speedtest.yourdomain.com"
+        echo "  curl -fsSL https://raw.githubusercontent.com/Krea-University/speed-test/main/install.sh | bash -s -- --no-tty speedtest.yourdomain.com"
         exit 1
     fi
     
     log_info "🌐 Domain: $DOMAIN"
     log_info "📧 Email: $EMAIL"
+    if [[ "${FORCE_NO_TTY}" == "true" ]]; then
+        log_info "🔧 Mode: Non-interactive (--no-tty)"
+    fi
 }
 
 check_prerequisites() {
@@ -138,11 +168,30 @@ download_source() {
 run_deployment() {
     log_info "🚀 Starting deployment..."
     
-    # Make scripts executable
-    chmod +x deploy.sh prepare-deploy.sh deployment-summary.sh
+    # Set environment for non-interactive mode if requested
+    if [[ "${FORCE_NO_TTY}" == "true" ]]; then
+        export DOCKER_NONINTERACTIVE=1
+        export DEBIAN_FRONTEND=noninteractive
+        log_info "🔧 Non-interactive mode enabled globally"
+    fi
     
-    # Run deployment
-    ./deploy.sh "$DOMAIN" "$EMAIL"
+    # Make scripts executable
+    chmod +x deploy.sh deploy-no-tty.sh fix-tty.sh 2>/dev/null || true
+    chmod +x prepare-deploy.sh deployment-summary.sh 2>/dev/null || true
+    
+    # Choose deployment method based on TTY settings
+    if [[ "${FORCE_NO_TTY}" == "true" ]]; then
+        if [[ -f "deploy-no-tty.sh" ]]; then
+            log_info "Using deploy-no-tty.sh wrapper..."
+            ./deploy-no-tty.sh "$DOMAIN" "$EMAIL"
+        else
+            log_info "Using deploy.sh with --no-tty flag..."
+            ./deploy.sh --no-tty "$DOMAIN" "$EMAIL"
+        fi
+    else
+        # Use standard deployment with passed arguments
+        ./deploy.sh "${DEPLOY_ARGS[@]}"
+    fi
     
     log_success "✅ Deployment completed successfully!"
 }
@@ -191,6 +240,12 @@ cleanup() {
 }
 
 main() {
+    # Set up non-interactive environment early if requested
+    if [[ "${FORCE_NO_TTY}" == "true" ]]; then
+        export DOCKER_NONINTERACTIVE=1
+        export DEBIAN_FRONTEND=noninteractive
+    fi
+    
     print_banner
     check_root
     check_domain
