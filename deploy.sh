@@ -1154,8 +1154,13 @@ echo "3. Restarting services..."
 docker-compose up -d
 echo "Update completed!"
 EOF
+
+    # Copy the database setup script
+    if [[ -f "/tmp/speed-test/setup-database.sh" ]]; then
+        cp /tmp/speed-test/setup-database.sh .
+    fi
     
-    chmod +x start.sh stop.sh restart.sh logs.sh status.sh backup-now.sh restore.sh renew-ssl.sh update.sh version.sh diagnose.sh setup-ssl-manual.sh
+    chmod +x start.sh stop.sh restart.sh logs.sh status.sh backup-now.sh restore.sh renew-ssl.sh update.sh version.sh diagnose.sh setup-ssl-manual.sh setup-database.sh
     log_success "Management scripts created"
 }
 
@@ -1273,17 +1278,51 @@ setup_admin_user() {
     log_info "Setting up admin user and API key..."
     
     # Wait for services to be fully ready
-    sleep 10
+    sleep 20
+    
+    # Wait for MySQL to be fully ready and database to be initialized
+    log_info "Waiting for database initialization to complete..."
+    for i in {1..30}; do
+        if docker_exec_safe mysql mysql -u speedtest -p"$MYSQL_DB_PASSWORD" speedtest -e "SHOW TABLES;" > /dev/null 2>&1; then
+            log_success "Database is ready"
+            break
+        fi
+        log_info "Waiting for database... (attempt $i/30)"
+        sleep 2
+    done
+    
+    # Check if api_keys table exists, if not wait a bit more
+    if ! docker_exec_safe mysql mysql -u speedtest -p"$MYSQL_DB_PASSWORD" speedtest -e "DESCRIBE api_keys;" > /dev/null 2>&1; then
+        log_warning "API keys table not found, waiting for migrations to complete..."
+        sleep 10
+        
+        # Try to create the table if it doesn't exist
+        docker_exec_safe mysql mysql -u speedtest -p"$MYSQL_DB_PASSWORD" speedtest <<'EOF'
+CREATE TABLE IF NOT EXISTS api_keys (
+    api_key VARCHAR(64) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    rate_limit_per_hour INT DEFAULT 1000,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+EOF
+    fi
     
     # Insert admin API key into database
-    docker_exec_safe mysql mysql -u speedtest -p"$MYSQL_DB_PASSWORD" speedtest <<EOF
+    if docker_exec_safe mysql mysql -u speedtest -p"$MYSQL_DB_PASSWORD" speedtest <<EOF
 INSERT INTO api_keys (api_key, name, is_active, rate_limit_per_hour, created_at, updated_at) 
 VALUES ('$ADMIN_API_KEY', 'admin', 1, 10000, NOW(), NOW()) 
 ON DUPLICATE KEY UPDATE 
 name='admin', is_active=1, rate_limit_per_hour=10000, updated_at=NOW();
 EOF
-    
-    log_success "Admin user configured"
+    then
+        log_success "Admin user configured successfully"
+    else
+        log_warning "Failed to configure admin user - you can set it up manually later"
+        log_info "Manual setup: Use the diagnose.sh script to troubleshoot database issues"
+    fi
 }
 
 display_deployment_summary() {
@@ -1317,6 +1356,7 @@ display_deployment_summary() {
     echo "  Update application: ./update.sh"
     echo "  Diagnose issues: ./diagnose.sh <domain>"
     echo "  Manual SSL setup: ./setup-ssl-manual.sh <domain>"
+    echo "  Database setup: ./setup-database.sh"
     echo ""
     echo -e "${BLUE}🔄 AUTO-RESTART & BACKUP:${NC}"
     echo "  ✅ All containers have restart policy: unless-stopped"
@@ -1359,6 +1399,7 @@ SSL Renewal: ./renew-ssl.sh
 Update: ./update.sh
 Diagnose: ./diagnose.sh <domain>
 Manual SSL: ./setup-ssl-manual.sh <domain>
+Database Setup: ./setup-database.sh
 
 AUTO-FEATURES:
 - Container auto-restart (unless-stopped policy)
