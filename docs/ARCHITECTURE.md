@@ -7,9 +7,9 @@ This document provides a comprehensive overview of the Speed Test Server's archi
 ## 📁 Directory Structure
 
 ```
-speed-test/
-├── cmd/                    # Application entry points
-│   └── speed-test/        # Main application
+speed-test-server/
+├── cmd/
+│   └── speed-test-server/  # Main application
 │       └── main.go        # Entry point with minimal logic
 │
 ├── internal/              # Private application packages

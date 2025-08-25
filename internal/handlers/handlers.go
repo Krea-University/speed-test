@@ -2,38 +2,58 @@
 package handlers
 
 import (
-	"crypto/rand"
+	"encoding/binary"
 	"encoding/json"
 	"io"
 	"log"
+	mathrand "math/rand"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/Krea-University/speed-test/internal/config"
-	"github.com/Krea-University/speed-test/internal/database"
-	"github.com/Krea-University/speed-test/internal/ipservice"
-	"github.com/Krea-University/speed-test/internal/models"
-	"github.com/Krea-University/speed-test/internal/types"
+	"github.com/Krea-University/speed-test-server/internal/config"
+	"github.com/Krea-University/speed-test-server/internal/database"
+	"github.com/Krea-University/speed-test-server/internal/ipservice"
+	"github.com/Krea-University/speed-test-server/internal/metrics"
+	"github.com/Krea-University/speed-test-server/internal/models"
+	"github.com/Krea-University/speed-test-server/internal/ratelimit"
+	"github.com/Krea-University/speed-test-server/internal/types"
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
-	"github.com/google/uuid"
 )
 
 // Handlers contains all HTTP handlers and their dependencies
 type Handlers struct {
-	ipService *ipservice.Service
-	db        *database.Service
-	upgrader  websocket.Upgrader
+	ipService     *ipservice.Service
+	db            *database.Service
+	rateLimiter   *ratelimit.ClientLimiter
+	metricsLogger *metrics.MetricsLogger
+	upgrader      websocket.Upgrader
 }
 
 // New creates a new handlers instance with dependencies
 func New(db *database.Service) *Handlers {
+	// Initialize metrics logger with fallback path
+	logPath := os.Getenv("METRICS_LOG_PATH")
+	if logPath == "" {
+		logPath = "/tmp/speed-test-server-logs"
+	}
+
+	metricsLogger, err := metrics.NewMetricsLogger(db, logPath)
+	if err != nil {
+		log.Printf("Warning: Failed to initialize metrics logger: %v", err)
+	}
+
 	return &Handlers{
-		ipService: ipservice.NewService(),
-		db:        db,
+		ipService:     ipservice.NewService(),
+		db:            db,
+		rateLimiter:   ratelimit.NewClientLimiter(100, 10, time.Minute), // 100 global, 10 per client per minute
+		metricsLogger: metricsLogger,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true // Allow all origins for testing purposes
@@ -66,12 +86,12 @@ func (h *Handlers) Ping(w http.ResponseWriter, r *http.Request) {
 	if h.db != nil {
 		clientIP := getClientIP(r)
 		latency := float64(time.Since(start).Nanoseconds()) / 1000000 // Convert to milliseconds
-		
+
 		test := models.NewSpeedTest(clientIP, "ping")
 		test.PingLatencyMs = &latency
 		userAgent := r.UserAgent()
 		test.UserAgent = &userAgent
-		
+
 		// Get IP info
 		if ipInfo, err := h.ipService.GetIPInfo(clientIP); err == nil {
 			test.ISP = &ipInfo.ISP
@@ -79,63 +99,213 @@ func (h *Handlers) Ping(w http.ResponseWriter, r *http.Request) {
 			test.Region = &ipInfo.Region
 			test.City = &ipInfo.City
 		}
-		
+
 		go h.db.CreateSpeedTest(test) // Store asynchronously
 	}
 }
 
-// Download streams random data for download speed testing
-// GET /download?size=BYTES
+// Download provides data for download speed testing with multi-threaded chunked support
+// @Summary Download speed test
+// @Description Stream random data for download speed measurement with optional chunked/threaded delivery
+// @Tags Speed Test
+// @Produce application/octet-stream
+// @Param size query int false "Data size in bytes" default(52428800)
+// @Param chunks query int false "Number of chunks for parallel download" default(1)
+// @Param chunk_size query int false "Size of each chunk in bytes" default(1048576)
+// @Success 200 {string} binary "Random data stream"
+// @Router /download [get]
 func (h *Handlers) Download(w http.ResponseWriter, r *http.Request) {
-	// Parse size parameter, default to configured default
+	// Check rate limit
+	clientIP := getClientIP(r)
+	if !h.rateLimiter.IsAllowed(clientIP) {
+		http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
+		return
+	}
+
+	h.rateLimiter.IncrementActiveTests(clientIP)
+	defer h.rateLimiter.DecrementActiveTests(clientIP)
+
+	// Parse parameters
 	sizeStr := r.URL.Query().Get("size")
-	size := config.DefaultDownloadSize
+	chunksStr := r.URL.Query().Get("chunks")
+	chunkSizeStr := r.URL.Query().Get("chunk_size")
+
+	size := int64(50 << 20)     // 50 MiB default
+	chunks := 1                 // Single thread default
+	chunkSize := int64(1 << 20) // 1 MiB default chunk size
 
 	if sizeStr != "" {
-		if parsedSize, err := strconv.Atoi(sizeStr); err == nil && parsedSize > 0 {
-			// Limit maximum download size to prevent abuse
-			if parsedSize > config.MaxUploadSize {
-				parsedSize = config.MaxUploadSize
-			}
+		if parsedSize, err := strconv.ParseInt(sizeStr, 10, 64); err == nil && parsedSize > 0 {
 			size = parsedSize
 		}
 	}
 
-	// Set appropriate headers for binary data streaming
+	if chunksStr != "" {
+		if parsedChunks, err := strconv.Atoi(chunksStr); err == nil && parsedChunks > 0 && parsedChunks <= 10 {
+			chunks = parsedChunks
+		}
+	}
+
+	if chunkSizeStr != "" {
+		if parsedChunkSize, err := strconv.ParseInt(chunkSizeStr, 10, 64); err == nil && parsedChunkSize > 0 {
+			chunkSize = parsedChunkSize
+		}
+	}
+
+	// Set headers
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Length", strconv.Itoa(size))
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
 
-	// Stream random data in chunks
-	buffer := make([]byte, config.BufferSize)
-	written := 0
+	if chunks > 1 {
+		// Multi-threaded chunked download
+		w.Header().Set("X-Chunks", strconv.Itoa(chunks))
+		w.Header().Set("X-Chunk-Size", strconv.FormatInt(chunkSize, 10))
+		h.downloadChunked(w, r, size, chunks, chunkSize)
+	} else {
+		// Single-threaded download
+		w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
+		h.downloadSingle(w, r, size)
+	}
+}
+
+// downloadSingle provides traditional single-threaded download
+func (h *Handlers) downloadSingle(w http.ResponseWriter, r *http.Request, size int64) {
+	// Use a seeded random source for reproducible data
+	src := mathrand.NewSource(time.Now().UnixNano())
+	rng := mathrand.New(src)
+
+	buffer := make([]byte, 8192) // 8KB buffer
+	written := int64(0)
 
 	for written < size {
-		chunkSize := len(buffer)
-		if written+chunkSize > size {
-			chunkSize = size - written
+		remaining := size - written
+		if remaining < int64(len(buffer)) {
+			buffer = buffer[:remaining]
 		}
 
-		// Generate cryptographically secure random data
-		if _, err := rand.Read(buffer[:chunkSize]); err != nil {
-			log.Printf("Error generating random data: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
+		// Fill buffer with random data
+		for i := range buffer {
+			buffer[i] = byte(rng.Intn(256))
 		}
 
-		n, err := w.Write(buffer[:chunkSize])
+		n, err := w.Write(buffer)
 		if err != nil {
-			log.Printf("Error writing download data: %v", err)
-			return
+			return // Client disconnected
+		}
+		written += int64(n)
+
+		// Flush periodically for streaming
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
 		}
 
-		written += n
+		// Check for client disconnect
+		select {
+		case <-r.Context().Done():
+			return
+		default:
+		}
+	}
+}
 
-		// Flush to ensure streaming behavior
-		if flusher, ok := w.(http.Flusher); ok {
-			flusher.Flush()
+// downloadChunked provides multi-threaded chunked download for smoother graphs
+func (h *Handlers) downloadChunked(w http.ResponseWriter, r *http.Request, totalSize int64, numChunks int, chunkSize int64) {
+	// Calculate chunk distribution
+	actualChunkSize := totalSize / int64(numChunks)
+	if actualChunkSize < chunkSize {
+		actualChunkSize = chunkSize
+	}
+
+	// Set chunked transfer encoding
+	w.Header().Set("Transfer-Encoding", "chunked")
+
+	// Create channels for coordination
+	chunkChan := make(chan []byte, numChunks)
+	errorChan := make(chan error, numChunks)
+
+	// Generate chunks in parallel
+	var wg sync.WaitGroup
+	for i := 0; i < numChunks; i++ {
+		wg.Add(1)
+		go func(chunkID int) {
+			defer wg.Done()
+
+			// Calculate this chunk's size
+			start := int64(chunkID) * actualChunkSize
+			end := start + actualChunkSize
+			if end > totalSize {
+				end = totalSize
+			}
+			size := end - start
+
+			if size <= 0 {
+				return
+			}
+
+			// Generate chunk data
+			chunk := make([]byte, size)
+			src := mathrand.NewSource(time.Now().UnixNano() + int64(chunkID))
+			rng := mathrand.New(src)
+
+			for j := range chunk {
+				chunk[j] = byte(rng.Intn(256))
+			}
+
+			// Add chunk metadata
+			chunkWithHeader := make([]byte, len(chunk)+8)
+			binary.BigEndian.PutUint32(chunkWithHeader[0:4], uint32(chunkID))
+			binary.BigEndian.PutUint32(chunkWithHeader[4:8], uint32(len(chunk)))
+			copy(chunkWithHeader[8:], chunk)
+
+			select {
+			case chunkChan <- chunkWithHeader:
+			case <-r.Context().Done():
+				return
+			}
+		}(i)
+	}
+
+	// Close channel when all chunks are generated
+	go func() {
+		wg.Wait()
+		close(chunkChan)
+		close(errorChan)
+	}()
+
+	// Stream chunks as they become available
+	chunksReceived := 0
+	for {
+		select {
+		case chunk, ok := <-chunkChan:
+			if !ok {
+				return // All chunks sent
+			}
+
+			_, err := w.Write(chunk)
+			if err != nil {
+				return // Client disconnected
+			}
+
+			chunksReceived++
+
+			// Flush for real-time streaming
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+
+			// Small delay between chunks for smoother delivery
+			time.Sleep(10 * time.Millisecond)
+
+		case err := <-errorChan:
+			if err != nil {
+				http.Error(w, "Chunk generation error", http.StatusInternalServerError)
+				return
+			}
+
+		case <-r.Context().Done():
+			return // Client disconnected
 		}
 	}
 }
@@ -143,6 +313,16 @@ func (h *Handlers) Download(w http.ResponseWriter, r *http.Request) {
 // Upload accepts data and returns bytes received for upload speed testing
 // POST /upload
 func (h *Handlers) Upload(w http.ResponseWriter, r *http.Request) {
+	// Check rate limit
+	clientIP := getClientIP(r)
+	if !h.rateLimiter.IsAllowed(clientIP) {
+		http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
+		return
+	}
+
+	h.rateLimiter.IncrementActiveTests(clientIP)
+	defer h.rateLimiter.DecrementActiveTests(clientIP)
+
 	// Limit the request body size to prevent abuse
 	r.Body = http.MaxBytesReader(w, r.Body, int64(config.MaxUploadSize))
 
@@ -261,8 +441,8 @@ func (h *Handlers) Version(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) Config(w http.ResponseWriter, r *http.Request) {
 	response := types.Config{
 		DefaultDownloadSize: config.DefaultDownloadSize,
-		Version:            config.Version,
-		MaxUploadSize:      config.MaxUploadSize,
+		Version:             config.Version,
+		MaxUploadSize:       config.MaxUploadSize,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Krea-University/speed-test/internal/database"
+	"github.com/Krea-University/speed-test-server/internal/database"
 )
 
 // Service provides authentication and rate limiting

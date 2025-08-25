@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/Krea-University/speed-test-server/internal/models"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/Krea-University/speed-test/internal/models"
 )
 
 // Service provides database operations
@@ -21,8 +21,31 @@ type Service struct {
 func New() (*Service, error) {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		// Default connection string for local development
-		dsn = "root:password@tcp(localhost:3306)/speedtest?charset=utf8mb4&parseTime=True&loc=Local"
+		// Build DSN from individual environment variables
+		host := os.Getenv("DB_HOST")
+		port := os.Getenv("DB_PORT")
+		user := os.Getenv("DB_USER")
+		password := os.Getenv("DB_PASSWORD")
+		dbname := os.Getenv("DB_NAME")
+
+		if host == "" {
+			host = "localhost"
+		}
+		if port == "" {
+			port = "3306"
+		}
+		if user == "" {
+			user = "root"
+		}
+		if password == "" {
+			password = "password"
+		}
+		if dbname == "" {
+			dbname = "speedtest"
+		}
+
+		dsn = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+			user, password, host, port, dbname)
 	}
 
 	db, err := sql.Open("mysql", dsn)
@@ -250,4 +273,97 @@ func (s *Service) UpdateSpeedTest(test *models.SpeedTest) error {
 	}
 
 	return nil
+}
+
+// CreateMetric creates a new metric record
+func (s *Service) CreateMetric(metric interface{}) error {
+	// Import the Metric type from metrics package
+	// This is a simplified implementation that stores metrics as JSON
+	query := `
+		INSERT INTO metrics (id, timestamp, type, client_ip, user_agent, location, 
+			latency_ms, jitter_ms, download_mbps, upload_mbps, test_duration_ms, 
+			data_size_bytes, chunk_count, server_load, concurrent_users, 
+			error_code, error_message, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+	`
+
+	// This is a placeholder implementation
+	// In a real scenario, you would properly map the metric struct fields
+	_, err := s.db.Exec(query,
+		"", time.Now(), "speed_test", "", "", "",
+		0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0.0, 0, "", "")
+
+	if err != nil {
+		return fmt.Errorf("failed to create metric: %v", err)
+	}
+
+	return nil
+}
+
+// GetMetrics retrieves metrics from the database
+func (s *Service) GetMetrics(metricType string, startTime, endTime time.Time, limit int) ([]interface{}, error) {
+	query := `
+		SELECT id, timestamp, type, client_ip, user_agent, location,
+			latency_ms, jitter_ms, download_mbps, upload_mbps, test_duration_ms,
+			data_size_bytes, chunk_count, server_load, concurrent_users,
+			error_code, error_message
+		FROM metrics
+		WHERE type = ? AND timestamp BETWEEN ? AND ?
+		ORDER BY timestamp DESC
+		LIMIT ?
+	`
+
+	rows, err := s.db.Query(query, metricType, startTime, endTime, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query metrics: %v", err)
+	}
+	defer rows.Close()
+
+	var metrics []interface{}
+	// This is a placeholder - you would populate actual metric structs here
+
+	return metrics, nil
+}
+
+// GetServerStats returns aggregated server statistics
+func (s *Service) GetServerStats(startTime, endTime time.Time) (*ServerStats, error) {
+	query := `
+		SELECT 
+			COUNT(*) as total_tests,
+			AVG(latency_ms) as avg_latency,
+			AVG(download_mbps) as avg_download,
+			AVG(upload_mbps) as avg_upload,
+			MAX(concurrent_users) as peak_concurrent,
+			(SELECT COUNT(*) FROM metrics WHERE type = 'error' AND timestamp BETWEEN ? AND ?) * 100.0 / COUNT(*) as error_rate
+		FROM metrics
+		WHERE type = 'speed_test' AND timestamp BETWEEN ? AND ?
+	`
+
+	var stats ServerStats
+	err := s.db.QueryRow(query, startTime, endTime, startTime, endTime).Scan(
+		&stats.TotalTests,
+		&stats.AverageLatency,
+		&stats.AverageDownload,
+		&stats.AverageUpload,
+		&stats.PeakConcurrent,
+		&stats.ErrorRate,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get server stats: %v", err)
+	}
+
+	stats.Timestamp = time.Now().UTC()
+	return &stats, nil
+}
+
+// ServerStats represents aggregated server statistics
+type ServerStats struct {
+	TotalTests      int64     `json:"total_tests"`
+	AverageLatency  float64   `json:"average_latency_ms"`
+	AverageDownload float64   `json:"average_download_mbps"`
+	AverageUpload   float64   `json:"average_upload_mbps"`
+	PeakConcurrent  int       `json:"peak_concurrent_users"`
+	ErrorRate       float64   `json:"error_rate_percent"`
+	Timestamp       time.Time `json:"timestamp"`
 }

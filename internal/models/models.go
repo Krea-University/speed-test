@@ -9,39 +9,39 @@ import (
 
 // SpeedTest represents a speed test record in the database
 type SpeedTest struct {
-	ID                   string     `json:"id" db:"id"`
-	ClientIP             string     `json:"client_ip" db:"client_ip"`
-	UserAgent            *string    `json:"user_agent,omitempty" db:"user_agent"`
-	TestType             string     `json:"test_type" db:"test_type"`
-	DownloadSpeedMbps    *float64   `json:"download_speed_mbps,omitempty" db:"download_speed_mbps"`
-	UploadSpeedMbps      *float64   `json:"upload_speed_mbps,omitempty" db:"upload_speed_mbps"`
-	PingLatencyMs        *float64   `json:"ping_latency_ms,omitempty" db:"ping_latency_ms"`
-	JitterMs             *float64   `json:"jitter_ms,omitempty" db:"jitter_ms"`
-	DownloadSizeBytes    *int64     `json:"download_size_bytes,omitempty" db:"download_size_bytes"`
-	UploadSizeBytes      *int64     `json:"upload_size_bytes,omitempty" db:"upload_size_bytes"`
-	TestDurationSeconds  *float64   `json:"test_duration_seconds,omitempty" db:"test_duration_seconds"`
-	ISP                  *string    `json:"isp,omitempty" db:"isp"`
-	Country              *string    `json:"country,omitempty" db:"country"`
-	Region               *string    `json:"region,omitempty" db:"region"`
-	City                 *string    `json:"city,omitempty" db:"city"`
-	ServerName           string     `json:"server_name" db:"server_name"`
-	ServerCountry        string     `json:"server_country" db:"server_country"`
-	ServerCity           string     `json:"server_city" db:"server_city"`
-	Sponsor              string     `json:"sponsor" db:"sponsor"`
-	CreatedAt            time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt            time.Time  `json:"updated_at" db:"updated_at"`
+	ID                  string    `json:"id" db:"id"`
+	ClientIP            string    `json:"client_ip" db:"client_ip"`
+	UserAgent           *string   `json:"user_agent,omitempty" db:"user_agent"`
+	TestType            string    `json:"test_type" db:"test_type"`
+	DownloadSpeedMbps   *float64  `json:"download_speed_mbps,omitempty" db:"download_speed_mbps"`
+	UploadSpeedMbps     *float64  `json:"upload_speed_mbps,omitempty" db:"upload_speed_mbps"`
+	PingLatencyMs       *float64  `json:"ping_latency_ms,omitempty" db:"ping_latency_ms"`
+	JitterMs            *float64  `json:"jitter_ms,omitempty" db:"jitter_ms"`
+	DownloadSizeBytes   *int64    `json:"download_size_bytes,omitempty" db:"download_size_bytes"`
+	UploadSizeBytes     *int64    `json:"upload_size_bytes,omitempty" db:"upload_size_bytes"`
+	TestDurationSeconds *float64  `json:"test_duration_seconds,omitempty" db:"test_duration_seconds"`
+	ISP                 *string   `json:"isp,omitempty" db:"isp"`
+	Country             *string   `json:"country,omitempty" db:"country"`
+	Region              *string   `json:"region,omitempty" db:"region"`
+	City                *string   `json:"city,omitempty" db:"city"`
+	ServerName          string    `json:"server_name" db:"server_name"`
+	ServerCountry       string    `json:"server_country" db:"server_country"`
+	ServerCity          string    `json:"server_city" db:"server_city"`
+	Sponsor             string    `json:"sponsor" db:"sponsor"`
+	CreatedAt           time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at" db:"updated_at"`
 }
 
 // OoklaCompatibleResponse represents an Ookla-compatible speed test response
 type OoklaCompatibleResponse struct {
-	Type      string                 `json:"type"`
-	Timestamp time.Time              `json:"timestamp"`
-	Ping      *OoklaPingResult       `json:"ping,omitempty"`
-	Download  *OoklaSpeedResult      `json:"download,omitempty"`
-	Upload    *OoklaSpeedResult      `json:"upload,omitempty"`
-	Interface *OoklaInterfaceInfo    `json:"interface,omitempty"`
-	Server    *OoklaServerInfo       `json:"server,omitempty"`
-	Result    *OoklaResultInfo       `json:"result,omitempty"`
+	Type      string              `json:"type"`
+	Timestamp time.Time           `json:"timestamp"`
+	Ping      *OoklaPingResult    `json:"ping,omitempty"`
+	Download  *OoklaSpeedResult   `json:"download,omitempty"`
+	Upload    *OoklaSpeedResult   `json:"upload,omitempty"`
+	Interface *OoklaInterfaceInfo `json:"interface,omitempty"`
+	Server    *OoklaServerInfo    `json:"server,omitempty"`
+	Result    *OoklaResultInfo    `json:"result,omitempty"`
 }
 
 // OoklaPingResult represents ping results in Ookla format
@@ -112,12 +112,12 @@ type RateLimit struct {
 
 // RateLimitWhitelist represents whitelisted IPs/ranges
 type RateLimitWhitelist struct {
-	ID          string     `json:"id" db:"id"`
-	IPAddress   *string    `json:"ip_address,omitempty" db:"ip_address"`
-	IPRange     *string    `json:"ip_range,omitempty" db:"ip_range"`
-	Description *string    `json:"description,omitempty" db:"description"`
-	CreatedAt   time.Time  `json:"created_at" db:"created_at"`
-	IsActive    bool       `json:"is_active" db:"is_active"`
+	ID          string    `json:"id" db:"id"`
+	IPAddress   *string   `json:"ip_address,omitempty" db:"ip_address"`
+	IPRange     *string   `json:"ip_range,omitempty" db:"ip_range"`
+	Description *string   `json:"description,omitempty" db:"description"`
+	CreatedAt   time.Time `json:"created_at" db:"created_at"`
+	IsActive    bool      `json:"is_active" db:"is_active"`
 }
 
 // NewSpeedTest creates a new speed test record

@@ -16,22 +16,22 @@ Krea Speed Test Server is a lightweight, professionally-architected Golang servi
 
 ```bash
 # Download and run the installation script
-curl -fsSL https://raw.githubusercontent.com/Krea-University/speed-test/main/install.sh | bash -s -- yourdomain.com admin@yourdomain.com
+curl -fsSL https://raw.githubusercontent.com/Krea-University/speed-test-server/main/install.sh | bash -s -- yourdomain.com admin@yourdomain.com
 ```
 
 ### Manual Installation
 
 1. **Clone and prepare**:
    ```bash
-   git clone https://github.com/Krea-University/speed-test.git
-   cd speed-test
+   git clone https://github.com/Krea-University/speed-test-server.git
+   cd speed-test-server
    ./prepare-deploy.sh
    ```
 
 2. **Deploy to server**:
    ```bash
-   scp -r /tmp/speed-test root@your-server:/tmp/
-   ssh root@your-server "cd /tmp/speed-test && ./deploy.sh yourdomain.com admin@yourdomain.com"
+   scp -r /tmp/speed-test-server root@your-server:/tmp/
+   ssh root@your-server "cd /tmp/speed-test-server && ./deploy.sh yourdomain.com admin@yourdomain.com"
    ```
 
 3. **Access your application**:
@@ -44,7 +44,7 @@ curl -fsSL https://raw.githubusercontent.com/Krea-University/speed-test/main/ins
 ### What You Get
 
 ✅ **Docker containers** with auto-restart  
-✅ **Daily MySQL backups** at `/var/backup/speed-test/`  
+✅ **Daily MySQL backups** at `/var/backup/speed-test-server/`  
 ✅ **SSL certificates** with auto-renewal (Let's Encrypt)  
 ✅ **Nginx reverse proxy** with security headers  
 ✅ **Admin API key** auto-generated  
@@ -86,8 +86,8 @@ curl -fsSL https://raw.githubusercontent.com/Krea-University/speed-test/main/ins
 The project follows Go best practices with a clean, modular architecture:
 
 ```
-speed-test/
-├── cmd/speed-test/         # Application entry point
+speed-test-server/
+├── cmd/speed-test-server/  # Application entry point
 │   └── main.go
 ├── internal/               # Private application code
 │   ├── config/            # Configuration constants
@@ -116,15 +116,15 @@ speed-test/
 
 ```bash
 # Clone the repository
-git clone https://github.com/Krea-University/speed-test.git
-cd speed-test
+git clone https://github.com/Krea-University/speed-test-server.git
+cd speed-test-server
 
 # Build and run using Make
 make build
 make run
 
 # Or run directly
-go run ./cmd/speed-test
+go run ./cmd/speed-test-server
 ```
 
 The server will start on port 8080 by default.
@@ -220,16 +220,16 @@ Returns version string or git commit hash.
 ### Clone and build
 
 ```bash
-git clone https://github.com/Krea-University/speed-test.git
-cd speed-test
+git clone https://github.com/Krea-University/speed-test-server.git
+cd speed-test-server
 go mod tidy
-go build -o speed-test .
+go build -o speed-test-server .
 ```
 
 ### Run
 
 ```bash
-./speed-test
+./speed-test-server
 ```
 
 By default, server listens on `:8080`.
@@ -351,7 +351,7 @@ make build-all      # Build for multiple platforms
 The application includes a comprehensive Docker-based production deployment with:
 
 - **Auto-restart**: All containers restart automatically unless stopped
-- **Daily MySQL backups**: Automated backups at 2:00 AM stored in `/var/backup/speed-test`
+- **Daily MySQL backups**: Automated backups at 2:00 AM stored in `/var/backup/speed-test-server`
 - **SSL with auto-renewal**: Let's Encrypt certificates renewed every 40 days
 - **Health monitoring**: Built-in health checks for all services
 - **Easy management**: Simple scripts for common operations
@@ -366,19 +366,19 @@ The application includes a comprehensive Docker-based production deployment with
 
 2. **Copy to your server**:
    ```bash
-   scp -r /tmp/speed-test root@your-server:/tmp/
+   scp -r /tmp/speed-test-server root@your-server:/tmp/
    ```
 
 3. **Deploy on server**:
    ```bash
    ssh root@your-server
-   cd /tmp/speed-test
+   cd /tmp/speed-test-server
    ./deploy.sh speedtest.yourdomain.com admin@yourdomain.com
    ```
 
 #### Management Commands
 
-After deployment, use these commands in `/opt/speed-test/`:
+After deployment, use these commands in `/opt/speed-test-server/`:
 
 ```bash
 # Service Management
@@ -391,7 +391,7 @@ After deployment, use these commands in `/opt/speed-test/`:
 # Backup & Restore
 ./backup-now.sh     # Manual backup
 ./restore.sh file   # Restore from backup
-ls /var/backup/speed-test/  # View backups
+ls /var/backup/speed-test-server/  # View backups
 
 # SSL & Updates
 ./renew-ssl.sh      # Renew SSL certificates
@@ -408,7 +408,7 @@ ls /var/backup/speed-test/  # View backups
 
 #### Backup Location
 
-All MySQL backups are stored in `/var/backup/speed-test/` with the format:
+All MySQL backups are stored in `/var/backup/speed-test-server/` with the format:
 - `speedtest_backup_YYYYMMDD_HHMMSS.sql.gz` (daily automated)
 - `manual_backup_YYYYMMDD_HHMMSS.sql.gz` (manual backups)
 
@@ -451,10 +451,10 @@ make docker-run
 
 ```bash
 # Build
-docker build -t speed-test .
+docker build -t speed-test-server .
 
 # Run with port mapping
-docker run -p 8080:8080 -e IPINFO_TOKEN=your_token speed-test
+docker run -p 8080:8080 -e IPINFO_TOKEN=your_token speed-test-server
 ```
 
 ### With Docker Compose (Development)
@@ -462,7 +462,7 @@ docker run -p 8080:8080 -e IPINFO_TOKEN=your_token speed-test
 ```yaml
 version: '3.8'
 services:
-  speed-test:
+  speed-test-server:
     build: .
     ports:
       - "8080:8080"

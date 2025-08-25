@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Krea-University/speed-test/internal/handlers"
-	"github.com/Krea-University/speed-test/internal/types"
+	"github.com/Krea-University/speed-test-server/internal/handlers"
+	"github.com/Krea-University/speed-test-server/internal/types"
 )
 
 func TestPingHandler(t *testing.T) {
 	h := handlers.New(nil)
-	
+
 	req, err := http.NewRequest("GET", "/ping", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +43,7 @@ func TestPingHandler(t *testing.T) {
 
 func TestHealthHandler(t *testing.T) {
 	h := handlers.New(nil)
-	
+
 	req, err := http.NewRequest("GET", "/healthz", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -69,7 +69,7 @@ func TestHealthHandler(t *testing.T) {
 
 func TestUploadHandler(t *testing.T) {
 	h := handlers.New(nil)
-	
+
 	testData := []byte("test upload data")
 	req, err := http.NewRequest("POST", "/upload", bytes.NewBuffer(testData))
 	if err != nil {
@@ -96,7 +96,7 @@ func TestUploadHandler(t *testing.T) {
 
 func TestVersionHandler(t *testing.T) {
 	h := handlers.New(nil)
-	
+
 	req, err := http.NewRequest("GET", "/version", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -122,7 +122,7 @@ func TestVersionHandler(t *testing.T) {
 
 func TestDownloadHandler(t *testing.T) {
 	h := handlers.New(nil)
-	
+
 	req, err := http.NewRequest("GET", "/download?size=1024", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -148,7 +148,7 @@ func TestDownloadHandler(t *testing.T) {
 
 func TestIPHandler(t *testing.T) {
 	h := handlers.New(nil)
-	
+
 	req, err := http.NewRequest("GET", "/ip", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -177,7 +177,7 @@ func TestIPHandler(t *testing.T) {
 
 func TestConfigHandler(t *testing.T) {
 	h := handlers.New(nil)
-	
+
 	req, err := http.NewRequest("GET", "/config", nil)
 	if err != nil {
 		t.Fatal(err)

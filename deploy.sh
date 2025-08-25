@@ -16,8 +16,8 @@ NC='\033[0m' # No Color
 # Configuration
 DOMAIN="$1"
 EMAIL="${2:-admin@${DOMAIN}}"
-APP_NAME="speed-test"
-BACKUP_DIR="/var/backup/speed-test"
+APP_NAME="speed-test-server"
+BACKUP_DIR="/var/backup/speed-test-server"
 ADMIN_API_KEY=$(openssl rand -hex 32)
 MYSQL_ROOT_PASSWORD=$(openssl rand -base64 32)
 MYSQL_DB_PASSWORD=$(openssl rand -base64 32)
@@ -542,7 +542,7 @@ docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 echo ""
 echo "=== Disk Usage ==="
 echo "Backup directory:"
-du -sh /var/backup/speed-test 2>/dev/null || echo "Backup directory not found"
+du -sh /var/backup/speed-test-server 2>/dev/null || echo "Backup directory not found"
 echo "Docker volumes:"
 docker system df
 EOF
@@ -566,7 +566,7 @@ EOF
 if [[ -z "$1" ]]; then
     echo "Usage: $0 <backup_file.sql.gz>"
     echo "Available backups:"
-    ls -lah /var/backup/speed-test/*.sql.gz 2>/dev/null || echo "No backups found"
+    ls -lah /var/backup/speed-test-server/*.sql.gz 2>/dev/null || echo "No backups found"
     exit 1
 fi
 
@@ -618,13 +618,13 @@ EOF
 copy_application_files() {
     log_info "Copying application files..."
     
-    # Copy application files from /tmp/speed-test if they exist
-    if [[ -d "/tmp/speed-test" ]]; then
-        cp -r /tmp/speed-test/* .
-        log_success "Application files copied from /tmp/speed-test"
+    # Copy application files from /tmp/speed-test-server if they exist
+    if [[ -d "/tmp/speed-test-server" ]]; then
+        cp -r /tmp/speed-test-server/* .
+        log_success "Application files copied from /tmp/speed-test-server"
     else
-        log_error "Application files not found in /tmp/speed-test"
-        log_error "Please copy your project files to /tmp/speed-test before running this script"
+        log_error "Application files not found in /tmp/speed-test-server"
+        log_error "Please copy your project files to /tmp/speed-test-server before running this script"
         exit 1
     fi
 }

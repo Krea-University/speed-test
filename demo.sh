@@ -18,7 +18,7 @@ fi
 
 # Build the application using the new structure
 echo "📦 Building application..."
-go build -o speed-test ./cmd/speed-test
+go build -o speed-test-server ./cmd/speed-test-server
 
 if [ $? -ne 0 ]; then
     echo "❌ Build failed"
@@ -29,7 +29,7 @@ echo "✅ Build successful"
 
 # Start the server in background
 echo "🌐 Starting server on port 8080..."
-./speed-test &
+./speed-test-server &
 SERVER_PID=$!
 
 # Wait for server to start
@@ -88,7 +88,7 @@ echo -e "\n🧹 Cleaning up..."
 kill $SERVER_PID 2>/dev/null
 wait $SERVER_PID 2>/dev/null
 rm -f /tmp/download_test.bin
-rm -f speed-test
+rm -f speed-test-server
 
 echo "✅ Demo completed successfully!"
 echo "💡 You can now run 'make run' to start the server manually"

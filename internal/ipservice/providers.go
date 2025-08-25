@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Krea-University/speed-test/internal/types"
+	"github.com/Krea-University/speed-test-server/internal/types"
 )
 
 // Provider interface defines methods that IP geolocation providers must implement

@@ -16,7 +16,7 @@ RUN go mod download
 COPY . .
 
 # Build the application from the cmd directory
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o speed-test ./cmd/speed-test
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o speed-test-server ./cmd/speed-test-server
 
 # Runtime stage
 FROM alpine:latest
@@ -30,10 +30,10 @@ RUN adduser -D -s /bin/sh appuser
 WORKDIR /app
 
 # Copy the binary from builder stage
-COPY --from=builder /app/speed-test .
+COPY --from=builder /app/speed-test-server .
 
 # Change ownership to non-root user
-RUN chown appuser:appuser /app/speed-test
+RUN chown appuser:appuser /app/speed-test-server
 
 # Switch to non-root user
 USER appuser
@@ -46,4 +46,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8080/healthz || exit 1
 
 # Run the binary
-CMD ["./speed-test"]
+CMD ["./speed-test-server"]

@@ -4,8 +4,8 @@ package types
 // Config represents the server configuration that can be shared with clients
 type Config struct {
 	DefaultDownloadSize int    `json:"default_download_size"` // Default download size in bytes
-	Version            string `json:"version"`               // Application version
-	MaxUploadSize      int    `json:"max_upload_size"`       // Maximum upload size in bytes
+	Version             string `json:"version"`               // Application version
+	MaxUploadSize       int    `json:"max_upload_size"`       // Maximum upload size in bytes
 }
 
 // PingResponse represents the response from the ping endpoint

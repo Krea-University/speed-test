@@ -40,7 +40,7 @@ prepare_deployment() {
     log_info "Creating deployment package..."
     
     # Create temporary deployment directory
-    DEPLOY_DIR="/tmp/speed-test"
+    DEPLOY_DIR="/tmp/speed-test-server"
     rm -rf "$DEPLOY_DIR"
     mkdir -p "$DEPLOY_DIR"
     
@@ -52,12 +52,12 @@ prepare_deployment() {
     rm -rf .git .gitignore README.md docs/
     
     # Ensure binary is present and executable
-    if [[ ! -f "bin/speed-test" ]]; then
+    if [[ ! -f "bin/speed-test-server" ]]; then
         log_error "Application binary not found. Please run 'make build' first."
         exit 1
     fi
     
-    chmod +x bin/speed-test
+    chmod +x bin/speed-test-server
     
     log_success "Deployment package prepared in $DEPLOY_DIR"
     
@@ -71,7 +71,7 @@ prepare_deployment() {
     echo ""
     echo "2. SSH to your server and run the deployment script:"
     echo "   ssh root@your-server"
-    echo "   cd /tmp/speed-test"
+    echo "   cd /tmp/speed-test-server"
     echo "   ./deploy.sh your-domain.com admin@your-domain.com"
     echo ""
     echo "3. Example deployment command:"

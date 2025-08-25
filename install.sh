@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Krea Speed Test Server - One-Command Installation Script
-# Usage: curl -fsSL https://raw.githubusercontent.com/Krea-University/speed-test/main/install.sh | bash -s -- <domain> [email]
+# Usage: curl -fsSL https://raw.githubusercontent.com/Krea-University/speed-test-server/main/install.sh | bash -s -- <domain> [email]
 
 set -e
 
@@ -16,8 +16,8 @@ NC='\033[0m' # No Color
 # Configuration
 DOMAIN="$1"
 EMAIL="${2:-admin@${DOMAIN}}"
-REPO_URL="https://github.com/Krea-University/speed-test.git"
-INSTALL_DIR="/tmp/speed-test-install"
+REPO_URL="https://github.com/Krea-University/speed-test-server.git"
+INSTALL_DIR="/tmp/speed-test-server-install"
 
 # Functions
 log_info() {
@@ -68,8 +68,8 @@ check_domain() {
         log_error "Example: $0 speedtest.example.com admin@example.com"
         echo ""
         echo -e "${YELLOW}💡 Quick start examples:${NC}"
-        echo "  curl -fsSL https://raw.githubusercontent.com/Krea-University/speed-test/main/install.sh | bash -s -- speedtest.yourdomain.com"
-        echo "  curl -fsSL https://raw.githubusercontent.com/Krea-University/speed-test/main/install.sh | bash -s -- speedtest.yourdomain.com admin@yourdomain.com"
+        echo "  curl -fsSL https://raw.githubusercontent.com/Krea-University/speed-test-server/main/install.sh | bash -s -- speedtest.yourdomain.com"
+        echo "  curl -fsSL https://raw.githubusercontent.com/Krea-University/speed-test-server/main/install.sh | bash -s -- speedtest.yourdomain.com admin@yourdomain.com"
         exit 1
     fi
     
@@ -166,25 +166,25 @@ display_completion() {
     echo -e "   ${BOLD}https://$DOMAIN/healthz${NC}"
     echo ""
     echo -e "${BLUE}🔧 Management:${NC}"
-    echo -e "   Location: ${BOLD}/opt/speed-test/${NC}"
-    echo -e "   Credentials: ${BOLD}/opt/speed-test/DEPLOYMENT_INFO.txt${NC}"
+    echo -e "   Location: ${BOLD}/opt/speed-test-server/${NC}"
+    echo -e "   Credentials: ${BOLD}/opt/speed-test-server/DEPLOYMENT_INFO.txt${NC}"
     echo ""
     echo -e "${YELLOW}⚠️  Important: Save your credentials from DEPLOYMENT_INFO.txt${NC}"
     echo ""
     echo -e "${BLUE}📋 Next Steps:${NC}"
     echo "   1. Test your application: curl https://$DOMAIN/healthz"
     echo "   2. View API docs: https://$DOMAIN/swagger/index.html"
-    echo "   3. Check management scripts: cd /opt/speed-test && ls *.sh"
-    echo "   4. View service status: cd /opt/speed-test && ./status.sh"
+    echo "   3. Check management scripts: cd /opt/speed-test-server && ls *.sh"
+    echo "   4. View service status: cd /opt/speed-test-server && ./status.sh"
     echo ""
     echo -e "${GREEN}🏁 Installation completed successfully!${NC}"
     echo ""
     
     # Show credentials if available
-    if [[ -f "/opt/speed-test/DEPLOYMENT_INFO.txt" ]]; then
+    if [[ -f "/opt/speed-test-server/DEPLOYMENT_INFO.txt" ]]; then
         echo -e "${YELLOW}📄 Deployment Information:${NC}"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        cat /opt/speed-test/DEPLOYMENT_INFO.txt
+        cat /opt/speed-test-server/DEPLOYMENT_INFO.txt
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     fi
 }

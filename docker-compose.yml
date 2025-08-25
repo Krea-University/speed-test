@@ -20,7 +20,7 @@ services:
       - speedtest-network
 
   # Speed Test Server
-  speed-test:
+  speed-test-server:
     build: .
     container_name: speedtest-server
     restart: unless-stopped

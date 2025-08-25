@@ -2,11 +2,11 @@
 
 # Build the application
 build:
-	go build -o bin/speed-test ./cmd/speed-test
+	go build -o bin/speed-test-server ./cmd/speed-test-server
 
 # Run the application
 run:
-	go run ./cmd/speed-test
+	go run ./cmd/speed-test-server
 
 # Clean build artifacts
 clean:
@@ -48,10 +48,10 @@ migrate-down:
 
 # Docker operations
 docker-build:
-	docker build -t speed-test .
+	docker build -t speed-test-server .
 
 docker-run:
-	docker run -p 8080:8080 --name speed-test-container speed-test
+	docker run -p 8080:8080 --name speed-test-server-container speed-test-server
 
 docker-compose-up:
 	docker-compose up -d
@@ -74,7 +74,7 @@ dev-tools:
 
 # Generate Swagger documentation
 swagger:
-	swag init -g cmd/speed-test/main.go -o docs
+	swag init -g cmd/speed-test-server/main.go -o docs
 
 # Run benchmarks
 bench:
@@ -86,9 +86,9 @@ docs:
 
 # Build for multiple platforms
 build-all:
-	GOOS=linux GOARCH=amd64 go build -o bin/speed-test-linux-amd64 ./cmd/speed-test
-	GOOS=darwin GOARCH=amd64 go build -o bin/speed-test-darwin-amd64 ./cmd/speed-test
-	GOOS=windows GOARCH=amd64 go build -o bin/speed-test-windows-amd64.exe ./cmd/speed-test
+	GOOS=linux GOARCH=amd64 go build -o bin/speed-test-server-linux-amd64 ./cmd/speed-test-server
+	GOOS=darwin GOARCH=amd64 go build -o bin/speed-test-server-darwin-amd64 ./cmd/speed-test-server
+	GOOS=windows GOARCH=amd64 go build -o bin/speed-test-server-windows-amd64.exe ./cmd/speed-test-server
 
 # API testing helpers
 test-api:
