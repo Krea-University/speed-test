@@ -346,6 +346,12 @@ services:
       - LOG_LEVEL=\${LOG_LEVEL}
       - ADMIN_API_KEY=\${ADMIN_API_KEY}
       - RATE_LIMIT_ENABLED=\${RATE_LIMIT_ENABLED}
+      # Additional database connection parameters
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=\${MYSQL_USER}
+      - DB_PASSWORD=\${MYSQL_PASSWORD}
+      - DB_NAME=\${MYSQL_DATABASE}
     ports:
       - "127.0.0.1:8080:8080"
     networks:
