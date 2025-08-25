@@ -1,8 +1,8 @@
 # Build stage
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 # Install build dependencies
-RUN apk add --no-cache git
+RUN apk add --no-cache git ca-certificates
 
 WORKDIR /app
 
@@ -19,10 +19,12 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o speed-test-server ./cmd/speed-test-server
 
 # Runtime stage
-FROM alpine:latest
+FROM alpine:3.20
 
-# Install runtime dependencies
-RUN apk --no-cache add ca-certificates tzdata
+# Install runtime dependencies and security updates
+RUN apk --no-cache add ca-certificates tzdata && \
+    apk --no-cache upgrade && \
+    rm -rf /var/cache/apk/*
 
 # Create non-root user
 RUN adduser -D -s /bin/sh appuser

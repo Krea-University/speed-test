@@ -44,3 +44,6 @@ coverage.html
 
 # Air live reload tool
 .air.toml.bak
+
+# Ignore the built
+speed-test-server

@@ -239,10 +239,17 @@ func (ml *MetricsLogger) GetMetrics(metricType string, startTime, endTime time.T
 
 // getMetricsFromFile reads metrics from log files
 func (ml *MetricsLogger) getMetricsFromFile(metricType string, startTime, endTime time.Time, limit int) ([]Metric, error) {
+	// Silence unused parameter warnings - this is a placeholder implementation
+	_ = metricType
+	_ = startTime
+	_ = endTime
+	_ = limit
+
 	var metrics []Metric
 
 	// This is a simplified implementation
 	// In production, you might want to implement proper file indexing
+	// TODO: Implement file-based metric retrieval with filters
 
 	return metrics, nil
 }
