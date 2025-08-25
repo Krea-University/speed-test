@@ -865,20 +865,179 @@ docker_exec nginx nginx -s reload
 echo "SSL renewal completed"
 EOF
     
+    # Diagnostic script
+    cat > diagnose.sh <<'EOF'
+#!/bin/bash
+
+echo "=== Krea Speed Test Server Diagnostics ==="
+echo "Date: $(date)"
+echo "Domain: $1"
+echo ""
+
+if [ -z "$1" ]; then
+    echo "Usage: ./diagnose.sh <domain>"
+    exit 1
+fi
+
+DOMAIN="$1"
+
+echo "1. Checking if domain resolves..."
+if nslookup "$DOMAIN" > /dev/null 2>&1; then
+    echo "✅ Domain resolves"
+    nslookup "$DOMAIN"
+else
+    echo "❌ Domain does not resolve"
+fi
+
+echo ""
+echo "2. Checking HTTP connectivity..."
+if curl -I "http://$DOMAIN" --connect-timeout 10 > /dev/null 2>&1; then
+    echo "✅ HTTP connection successful"
+    curl -I "http://$DOMAIN" --connect-timeout 10
+else
+    echo "❌ HTTP connection failed"
+    echo "Trying with verbose output:"
+    curl -v "http://$DOMAIN" --connect-timeout 10 || true
+fi
+
+echo ""
+echo "3. Checking if ACME challenge path is accessible..."
+TEST_FILE="test-$(date +%s).txt"
+docker-compose exec -T nginx sh -c "echo 'test' > /var/www/certbot/$TEST_FILE"
+if curl "http://$DOMAIN/.well-known/acme-challenge/$TEST_FILE" --connect-timeout 10 > /dev/null 2>&1; then
+    echo "✅ ACME challenge path is accessible"
+else
+    echo "❌ ACME challenge path is not accessible"
+    echo "This is likely why SSL certificate generation failed"
+fi
+docker-compose exec -T nginx sh -c "rm -f /var/www/certbot/$TEST_FILE"
+
+echo ""
+echo "4. Checking Docker containers..."
+docker-compose ps
+
+echo ""
+echo "5. Checking nginx logs..."
+echo "Recent nginx access logs:"
+docker-compose logs nginx | tail -20
+
+echo ""
+echo "6. Network connectivity test..."
+echo "Server's public IP:"
+curl -s ifconfig.me 2>/dev/null || curl -s ipinfo.io/ip 2>/dev/null || echo "Could not determine public IP"
+
+echo ""
+echo "7. Port accessibility check..."
+if command -v nc > /dev/null; then
+    echo "Checking if port 80 is accessible from outside:"
+    timeout 5 nc -zv "$DOMAIN" 80 2>&1 || echo "Port 80 may not be accessible"
+    echo "Checking if port 443 is accessible from outside:"
+    timeout 5 nc -zv "$DOMAIN" 443 2>&1 || echo "Port 443 may not be accessible"
+else
+    echo "netcat not available for port checking"
+fi
+
+echo ""
+echo "=== Diagnostics Complete ==="
+echo ""
+echo "Common issues and solutions:"
+echo "1. Domain not pointing to this server - Update DNS A record"
+echo "2. Firewall blocking ports 80/443 - Open these ports"
+echo "3. Server behind NAT/proxy - Configure port forwarding"
+echo "4. Domain not propagated yet - Wait for DNS propagation"
+EOF
+
+    # Manual SSL setup script
+    cat > setup-ssl-manual.sh <<'EOF'
+#!/bin/bash
+
+echo "=== Manual SSL Certificate Setup ==="
+echo "This script helps setup SSL when automatic certificate generation fails"
+echo ""
+
+DOMAIN="$1"
+if [ -z "$DOMAIN" ]; then
+    echo "Usage: ./setup-ssl-manual.sh <domain>"
+    exit 1
+fi
+
+echo "Domain: $DOMAIN"
+echo ""
+
+echo "Step 1: Verify domain accessibility..."
+echo "Testing HTTP connection to $DOMAIN..."
+
+# Test basic connectivity
+if curl -I "http://$DOMAIN" --connect-timeout 10; then
+    echo "✅ Domain is accessible via HTTP"
+else
+    echo "❌ Domain is not accessible via HTTP"
+    echo ""
+    echo "Please ensure:"
+    echo "1. DNS A record points to this server's IP: $(curl -s ifconfig.me)"
+    echo "2. Firewall allows incoming connections on port 80 and 443"
+    echo "3. No other web server is running on these ports"
+    echo ""
+    read -p "Continue anyway? (y/N): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        exit 1
+    fi
+fi
+
+echo ""
+echo "Step 2: Testing ACME challenge path..."
+TEST_FILE="test-$(date +%s).txt"
+docker-compose exec -T nginx sh -c "echo 'challenge-test' > /var/www/certbot/$TEST_FILE"
+
+if curl "http://$DOMAIN/.well-known/acme-challenge/$TEST_FILE" --connect-timeout 10; then
+    echo "✅ ACME challenge path is working"
+    docker-compose exec -T nginx sh -c "rm -f /var/www/certbot/$TEST_FILE"
+else
+    echo "❌ ACME challenge path is not accessible"
+    docker-compose exec -T nginx sh -c "rm -f /var/www/certbot/$TEST_FILE"
+    echo ""
+    echo "The webroot path is not accessible. This will prevent SSL certificate generation."
+    echo "Please check your firewall and DNS settings."
+    exit 1
+fi
+
+echo ""
+echo "Step 3: Attempting SSL certificate generation..."
+echo "Running certbot with verbose output..."
+
+# Try to get certificate with verbose output
+if docker-compose run --rm -T certbot certonly --webroot -w /var/www/certbot \
+    --email "admin@$DOMAIN" -d "$DOMAIN" --agree-tos --no-eff-email --verbose; then
+    echo "✅ SSL certificate generated successfully"
+    
+    echo ""
+    echo "Step 4: Reloading nginx with SSL configuration..."
+    docker-compose exec -T nginx nginx -s reload
+    echo "✅ Nginx reloaded with SSL configuration"
+    
+    echo ""
+    echo "🎉 SSL setup completed successfully!"
+    echo "Your site should now be accessible at: https://$DOMAIN"
+else
+    echo "❌ SSL certificate generation failed"
+    echo ""
+    echo "Alternative options:"
+    echo "1. Use self-signed certificate for testing"
+    echo "2. Check certbot logs: docker-compose logs certbot"
+    echo "3. Run diagnostics: ./diagnose.sh $DOMAIN"
+fi
+EOF
+
     # Update script
     cat > update.sh <<'EOF'
-#!/bin/bash
-echo "Updating Krea Speed Test Server..."
-echo "1. Pulling latest images..."
-docker-compose pull
-echo "2. Rebuilding application..."
 docker-compose build --no-cache app
 echo "3. Restarting services..."
 docker-compose up -d
 echo "Update completed!"
 EOF
     
-    chmod +x start.sh stop.sh restart.sh logs.sh status.sh backup-now.sh restore.sh renew-ssl.sh update.sh version.sh
+    chmod +x start.sh stop.sh restart.sh logs.sh status.sh backup-now.sh restore.sh renew-ssl.sh update.sh version.sh diagnose.sh setup-ssl-manual.sh
     log_success "Management scripts created"
 }
 
@@ -1004,6 +1163,8 @@ display_deployment_summary() {
     echo "  Restore backup: ./restore.sh <backup_file>"
     echo "  Renew SSL: ./renew-ssl.sh"
     echo "  Update application: ./update.sh"
+    echo "  Diagnose issues: ./diagnose.sh <domain>"
+    echo "  Manual SSL setup: ./setup-ssl-manual.sh <domain>"
     echo ""
     echo -e "${BLUE}🔄 AUTO-RESTART & BACKUP:${NC}"
     echo "  ✅ All containers have restart policy: unless-stopped"
@@ -1044,6 +1205,8 @@ Manual Backup: ./backup-now.sh
 Restore: ./restore.sh <backup_file>
 SSL Renewal: ./renew-ssl.sh
 Update: ./update.sh
+Diagnose: ./diagnose.sh <domain>
+Manual SSL: ./setup-ssl-manual.sh <domain>
 
 AUTO-FEATURES:
 - Container auto-restart (unless-stopped policy)
