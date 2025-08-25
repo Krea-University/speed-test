@@ -48,8 +48,11 @@ echo "  ./backup-now.sh     - Manual database backup"
 echo "  ./restore.sh <file> - Restore from backup"
 echo ""
 echo "Maintenance:"
+Maintenance:
 echo "  ./renew-ssl.sh      - Renew SSL certificates"
-echo "  ./update.sh         - Update application"
+echo "  ./update.sh         - Update to latest version"
+echo "  ./version.sh        - Show version information"
+echo "  ./version.sh --check-updates - Check for updates"
 echo ""
 
 echo "🔧 BUILT-IN FEATURES:"

@@ -395,8 +395,38 @@ ls /var/backup/speed-test-server/  # View backups
 
 # SSL & Updates
 ./renew-ssl.sh      # Renew SSL certificates
-./update.sh         # Update application
+./update.sh         # Update application to latest version
+./version.sh        # Show current version information
+./version.sh --check-updates  # Check for available updates
 ```
+
+#### Update Management
+
+The speed test server includes intelligent update tools:
+
+```bash
+# Check current version and status
+./version.sh
+
+# Check for available updates
+./version.sh --check-updates
+
+# Update to latest version (with automatic backup)
+sudo ./update.sh
+
+# Force update (skip version check)
+sudo ./update.sh --force
+
+# Update from specific branch
+sudo ./update.sh --branch=development
+```
+
+**Update Features:**
+- **Automatic backup**: Creates backup before updating
+- **Zero-downtime**: Graceful service restart
+- **Rollback support**: Easy rollback if update fails
+- **Health verification**: Ensures services work after update
+- **Docker rebuild**: Updates containers with latest dependencies
 
 #### Auto-Features
 

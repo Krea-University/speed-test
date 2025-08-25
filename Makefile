@@ -39,6 +39,17 @@ deps:
 setup:
 	./setup-dev.sh
 
+# Version management
+version:
+	./version.sh
+
+check-updates:
+	./version.sh --check-updates
+
+# Update (requires sudo)
+update:
+	sudo ./update.sh
+
 # Database migrations
 migrate-up:
 	docker-compose exec mysql mysql -uspeedtest -pspeedtest speedtest < migrations/001_create_tables.up.sql

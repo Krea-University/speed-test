@@ -140,22 +140,49 @@ create_directories() {
     log_success "Directories created"
 }
 
+create_environment_file() {
+    log_info "Creating environment configuration..."
+    
+    cat > .env <<EOF
+# Krea Speed Test Server Environment Configuration
+# Generated on $(date)
+
+# Database Configuration
+MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+MYSQL_DATABASE=speedtest
+MYSQL_USER=speedtest
+MYSQL_PASSWORD=${MYSQL_DB_PASSWORD}
+
+# Application Configuration
+PORT=8080
+ENVIRONMENT=production
+LOG_LEVEL=info
+ADMIN_API_KEY=${ADMIN_API_KEY}
+
+# IP Geolocation Service
+IPINFO_TOKEN=20e16b08cd509a
+
+# Rate Limiting
+RATE_LIMIT_ENABLED=true
+EOF
+    
+    log_success "Environment file created"
+}
+
 create_docker_compose() {
     log_info "Creating Docker Compose configuration..."
     
     cat > docker-compose.yml <<EOF
-version: '3.8'
-
 services:
   mysql:
     image: mysql:8.0
     container_name: ${APP_NAME}-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: speedtest
-      MYSQL_USER: speedtest
-      MYSQL_PASSWORD: ${MYSQL_DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: \${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: \${MYSQL_DATABASE}
+      MYSQL_USER: \${MYSQL_USER}
+      MYSQL_PASSWORD: \${MYSQL_PASSWORD}
     volumes:
       - mysql_data:/var/lib/mysql
       - ./migrations:/docker-entrypoint-initdb.d:ro
@@ -182,12 +209,13 @@ services:
       mysql:
         condition: service_healthy
     environment:
-      - PORT=8080
-      - DATABASE_URL=mysql://speedtest:${MYSQL_DB_PASSWORD}@mysql:3306/speedtest
-      - IPINFO_TOKEN=20e16b08cd509a
-      - ENVIRONMENT=production
-      - LOG_LEVEL=info
-      - ADMIN_API_KEY=${ADMIN_API_KEY}
+      - PORT=\${PORT}
+      - DATABASE_URL=mysql://\${MYSQL_USER}:\${MYSQL_PASSWORD}@mysql:3306/\${MYSQL_DATABASE}
+      - IPINFO_TOKEN=\${IPINFO_TOKEN}
+      - ENVIRONMENT=\${ENVIRONMENT}
+      - LOG_LEVEL=\${LOG_LEVEL}
+      - ADMIN_API_KEY=\${ADMIN_API_KEY}
+      - RATE_LIMIT_ENABLED=\${RATE_LIMIT_ENABLED}
     ports:
       - "127.0.0.1:8080:8080"
     networks:
@@ -502,7 +530,7 @@ create_management_scripts() {
     cat > start.sh <<'EOF'
 #!/bin/bash
 echo "Starting Krea Speed Test Server..."
-docker-compose up -d
+COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose up -d
 echo "Services started. Use './logs.sh' to view logs."
 EOF
     
@@ -510,7 +538,7 @@ EOF
     cat > stop.sh <<'EOF'
 #!/bin/bash
 echo "Stopping Krea Speed Test Server..."
-docker-compose down
+COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose down
 echo "Services stopped."
 EOF
     
@@ -518,7 +546,7 @@ EOF
     cat > restart.sh <<'EOF'
 #!/bin/bash
 echo "Restarting Krea Speed Test Server..."
-docker-compose restart
+COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose restart
 echo "Services restarted."
 EOF
     
@@ -603,15 +631,15 @@ EOF
 #!/bin/bash
 echo "Updating Krea Speed Test Server..."
 echo "1. Pulling latest images..."
-docker-compose pull
+COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose pull
 echo "2. Rebuilding application..."
-docker-compose build --no-cache app
+COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose build --no-cache app
 echo "3. Restarting services..."
-docker-compose up -d
+COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose up -d
 echo "Update completed!"
 EOF
     
-    chmod +x start.sh stop.sh restart.sh logs.sh status.sh backup-now.sh restore.sh renew-ssl.sh update.sh
+    chmod +x start.sh stop.sh restart.sh logs.sh status.sh backup-now.sh restore.sh renew-ssl.sh update.sh version.sh
     log_success "Management scripts created"
 }
 
@@ -645,34 +673,34 @@ EOF
 deploy_services() {
     log_info "Deploying services with Docker Compose..."
     
-    # Build and start services
-    docker-compose build
-    docker-compose up -d mysql
+    # Build and start services without TTY allocation
+    COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose build
+    COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose up -d mysql
     
     # Wait for MySQL to be ready
     log_info "Waiting for MySQL to be ready..."
     sleep 30
     
     # Start application
-    docker-compose up -d app
+    COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose up -d app
     
     # Wait for application to be ready
     log_info "Waiting for application to be ready..."
     sleep 20
     
     # Start nginx (without SSL first)
-    docker-compose up -d nginx
+    COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose up -d nginx
     
     # Initialize SSL certificates
     log_info "Initializing SSL certificates..."
     sleep 10
-    docker-compose run --rm certbot
+    COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose run --rm certbot
     
     # Reload nginx with SSL
-    docker-compose exec nginx nginx -s reload
+    COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose exec -T nginx nginx -s reload
     
     # Start backup service
-    docker-compose up -d backup
+    COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose up -d backup
     
     log_success "All services deployed and running"
 }
@@ -789,6 +817,7 @@ main() {
     install_docker
     create_directories
     copy_application_files
+    create_environment_file
     create_docker_compose
     create_nginx_config
     create_backup_script
