@@ -416,10 +416,7 @@ create_nginx_config() {
     fi
     
     # Create nginx.conf file with error checking
-    cat > nginx.conf <<EOF || {
-        log_error "Failed to create nginx.conf - check permissions and disk space"
-        exit 1
-    }
+    cat > nginx.conf <<EOF
 events {
     worker_connections 1024;
     use epoll;
@@ -572,6 +569,12 @@ http {
     }
 }
 EOF
+
+    # Check if the file creation was successful
+    if [[ $? -ne 0 ]]; then
+        log_error "Failed to create nginx.conf - check permissions and disk space"
+        exit 1
+    fi
 
     # Verify nginx.conf was created successfully
     if [[ -f "nginx.conf" ]]; then
