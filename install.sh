@@ -7,33 +7,31 @@
 set -e
 
 # Parse command line arguments
-DEPLOY_ARGS=()
+FLAGS=()
+POSITIONAL=()
 FORCE_NO_TTY=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --no-tty)
             FORCE_NO_TTY=true
-            DEPLOY_ARGS+=("$1")
+            FLAGS+=("$1")
             shift
             ;;
         --debug-tty)
-            DEPLOY_ARGS+=("$1")
+            FLAGS+=("$1")
             shift
             ;;
         *)
-            DEPLOY_ARGS+=("$1")
+            POSITIONAL+=("$1")
             shift
             ;;
     esac
 done
 
-# Set positional parameters from remaining args
-set -- "${DEPLOY_ARGS[@]}"
-
-# Configuration
-DOMAIN="$1"
-EMAIL="${2:-admin@${DOMAIN}}"
+# Configuration from positional arguments
+DOMAIN="${POSITIONAL[0]}"
+EMAIL="${POSITIONAL[1]:-admin@${DOMAIN}}"
 REPO_URL="https://github.com/Krea-University/speed-test.git"
 INSTALL_DIR="/tmp/speed-test"
 
@@ -180,17 +178,13 @@ run_deployment() {
     chmod +x prepare-deploy.sh deployment-summary.sh 2>/dev/null || true
     
     # Choose deployment method based on TTY settings
-    if [[ "${FORCE_NO_TTY}" == "true" ]]; then
-        if [[ -f "deploy-no-tty.sh" ]]; then
-            log_info "Using deploy-no-tty.sh wrapper..."
-            ./deploy-no-tty.sh "$DOMAIN" "$EMAIL"
-        else
-            log_info "Using deploy.sh with --no-tty flag..."
-            ./deploy.sh --no-tty "$DOMAIN" "$EMAIL"
-        fi
+    if [[ "${FORCE_NO_TTY}" == "true" && -f "deploy-no-tty.sh" ]]; then
+        log_info "Using deploy-no-tty.sh wrapper..."
+        ./deploy-no-tty.sh "$DOMAIN" "$EMAIL"
     else
-        # Use standard deployment with passed arguments
-        ./deploy.sh "${DEPLOY_ARGS[@]}"
+        log_info "Using deploy.sh with flags: ${FLAGS[*]} and args: $DOMAIN $EMAIL"
+        # Pass flags first, then domain and email
+        ./deploy.sh "${FLAGS[@]}" "$DOMAIN" "$EMAIL"
     fi
     
     log_success "✅ Deployment completed successfully!"
