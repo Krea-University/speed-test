@@ -557,6 +557,8 @@ export DEBIAN_FRONTEND=noninteractive
 - **Permission denied**: Run deployment script as root (`sudo`)
 - **Port conflicts**: Ensure ports 80, 443, 3306, 8080 are available
 - **SSL certificate issues**: Check domain DNS points to server IP
+- **"nginx.conf: Is a directory" error**: Fixed automatically by cleanup function
+- **File creation conflicts**: The script now removes conflicting directories automatically
 
 ### Log Analysis
 

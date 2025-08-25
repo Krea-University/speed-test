@@ -90,6 +90,39 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Safe file creation - removes directory if exists, creates file
+safe_create_file() {
+    local filename="$1"
+    local content="$2"
+    
+    if [[ -d "$filename" ]]; then
+        log_warning "Found $filename directory, removing it..."
+        rm -rf "$filename"
+    fi
+    
+    echo "$content" > "$filename" || {
+        log_error "Failed to create $filename"
+        exit 1
+    }
+}
+
+cleanup_conflicting_files() {
+    log_info "Cleaning up any conflicting files/directories..."
+    
+    # List of files that should not be directories
+    local config_files=(".env" "docker-compose.yml" "nginx.conf" "backup-script.sh" 
+                       "start.sh" "stop.sh" "restart.sh" "logs.sh" "status.sh" 
+                       "backup-now.sh" "restore.sh" "renew-ssl.sh" "update.sh" 
+                       "version.sh" "DEPLOYMENT_INFO.txt")
+    
+    for file in "${config_files[@]}"; do
+        if [[ -d "$file" ]]; then
+            log_warning "Found $file directory, removing it..."
+            rm -rf "$file"
+        fi
+    done
+}
+
 check_root() {
     if [[ $EUID -ne 0 ]]; then
         log_error "This script must be run as root (use sudo)"
@@ -196,7 +229,13 @@ create_directories() {
 }
 
 create_environment_file() {
-    log_info "Creating environment configuration..."
+    log_info "Creating environment file..."
+    
+    # Remove .env if it exists as a directory
+    if [[ -d ".env" ]]; then
+        log_warning "Found .env directory, removing it..."
+        rm -rf .env
+    fi
     
     cat > .env <<EOF
 # Krea Speed Test Server Environment Configuration
@@ -226,6 +265,12 @@ EOF
 
 create_docker_compose() {
     log_info "Creating Docker Compose configuration..."
+    
+    # Remove docker-compose.yml if it exists as a directory
+    if [[ -d "docker-compose.yml" ]]; then
+        log_warning "Found docker-compose.yml directory, removing it..."
+        rm -rf docker-compose.yml
+    fi
     
     cat > docker-compose.yml <<EOF
 services:
@@ -364,7 +409,17 @@ EOF
 create_nginx_config() {
     log_info "Creating Nginx configuration..."
     
-    cat > nginx.conf <<EOF
+    # Remove nginx.conf if it exists as a directory
+    if [[ -d "nginx.conf" ]]; then
+        log_warning "Found nginx.conf directory, removing it..."
+        rm -rf nginx.conf
+    fi
+    
+    # Create nginx.conf file with error checking
+    cat > nginx.conf <<EOF || {
+        log_error "Failed to create nginx.conf - check permissions and disk space"
+        exit 1
+    }
 events {
     worker_connections 1024;
     use epoll;
@@ -518,7 +573,13 @@ http {
 }
 EOF
 
-    log_success "Nginx configuration created"
+    # Verify nginx.conf was created successfully
+    if [[ -f "nginx.conf" ]]; then
+        log_success "Nginx configuration created successfully"
+    else
+        log_error "Failed to create nginx.conf file"
+        exit 1
+    fi
 }
 
 create_backup_script() {
@@ -975,6 +1036,7 @@ main() {
     
     check_root
     check_domain
+    cleanup_conflicting_files
     check_prerequisites
     install_docker
     create_directories
