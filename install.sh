@@ -17,7 +17,7 @@ NC='\033[0m' # No Color
 DOMAIN="$1"
 EMAIL="${2:-admin@${DOMAIN}}"
 REPO_URL="https://github.com/Krea-University/speed-test-server.git"
-INSTALL_DIR="/tmp/speed-test-server-install"
+INSTALL_DIR="/tmp/speed-test-server"
 
 # Functions
 log_info() {
