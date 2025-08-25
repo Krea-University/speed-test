@@ -1167,13 +1167,16 @@ EOF
 copy_application_files() {
     log_info "Copying application files..."
     
-    # Copy application files from /tmp/speed-test-server if they exist
-    if [[ -d "/tmp/speed-test-server" ]]; then
+    # Copy application files from /tmp/speed-test (new) or /tmp/speed-test-server (legacy) if they exist
+    if [[ -d "/tmp/speed-test" ]]; then
+        cp -r /tmp/speed-test/* .
+        log_success "Application files copied from /tmp/speed-test"
+    elif [[ -d "/tmp/speed-test-server" ]]; then
         cp -r /tmp/speed-test-server/* .
         log_success "Application files copied from /tmp/speed-test-server"
     else
-        log_error "Application files not found in /tmp/speed-test-server"
-        log_error "Please copy your project files to /tmp/speed-test-server before running this script"
+        log_error "Application files not found in /tmp/speed-test or /tmp/speed-test-server"
+        log_error "Please copy your project files to /tmp/speed-test before running this script"
         exit 1
     fi
 }
