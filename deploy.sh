@@ -2,7 +2,13 @@
 
 # Krea Speed Test Server - Docker Production Deployment with Auto-Restart & Daily Backups
 # This script deploys the speed test server using Docker with SSL, auto-restart, and daily MySQL backups
-# Usage: ./deploy.sh <domain> [email]
+# Usage: ./deploy.sh [--no-tty] <domain> [email]
+# 
+# Options:
+#   --no-tty              Force non-interactive mode (disable TTY)
+# 
+# Environment Variables:
+#   DOCKER_NONINTERACTIVE=1 - Force non-interactive mode if TTY detection fails
 
 set -e
 
@@ -12,6 +18,27 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
+
+# Parse command line arguments
+FORCE_NO_TTY=false
+ARGS=()
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --no-tty)
+            FORCE_NO_TTY=true
+            export DOCKER_NONINTERACTIVE=1
+            shift
+            ;;
+        *)
+            ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# Set positional parameters from remaining args
+set -- "${ARGS[@]}"
 
 # Configuration
 DOMAIN="$1"
@@ -23,6 +50,30 @@ MYSQL_ROOT_PASSWORD=$(openssl rand -base64 32)
 MYSQL_DB_PASSWORD=$(openssl rand -base64 32)
 
 # Functions
+# Docker Compose wrapper for non-interactive environments
+docker_exec() {
+    # Force non-interactive if --no-tty was specified
+    if [[ "${FORCE_NO_TTY}" == "true" ]] || [[ "${DOCKER_NONINTERACTIVE}" == "1" ]]; then
+        docker-compose exec -T "$@"
+    # Try TTY detection
+    elif [ -t 0 ]; then
+        docker-compose exec "$@"
+    else
+        # Use -T flag for non-interactive mode
+        docker-compose exec -T "$@"
+    fi
+}
+
+# Alternative wrapper using environment variable override
+docker_exec_safe() {
+    # Force non-interactive mode if DOCKER_NONINTERACTIVE is set or --no-tty flag
+    if [[ "${DOCKER_NONINTERACTIVE}" == "1" ]] || [[ "${FORCE_NO_TTY}" == "true" ]]; then
+        docker-compose exec -T "$@"
+    else
+        docker_exec "$@"
+    fi
+}
+
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
 }
@@ -48,13 +99,17 @@ check_root() {
 
 check_domain() {
     if [[ -z "$DOMAIN" ]]; then
-        log_error "Usage: $0 <domain> [email]"
+        log_error "Usage: $0 [--no-tty] <domain> [email]"
         log_error "Example: $0 speedtest.example.com admin@example.com"
+        log_error "Example: $0 --no-tty speedtest.example.com admin@example.com"
         exit 1
     fi
     
     log_info "Deploying for domain: $DOMAIN"
     log_info "Contact email: $EMAIL"
+    if [[ "${FORCE_NO_TTY}" == "true" ]]; then
+        log_info "Mode: Non-interactive (--no-tty specified)"
+    fi
 }
 
 check_prerequisites() {
@@ -530,7 +585,7 @@ create_management_scripts() {
     cat > start.sh <<'EOF'
 #!/bin/bash
 echo "Starting Krea Speed Test Server..."
-COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose up -d
+docker-compose up -d
 echo "Services started. Use './logs.sh' to view logs."
 EOF
     
@@ -538,7 +593,7 @@ EOF
     cat > stop.sh <<'EOF'
 #!/bin/bash
 echo "Stopping Krea Speed Test Server..."
-COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose down
+docker-compose down
 echo "Services stopped."
 EOF
     
@@ -546,7 +601,7 @@ EOF
     cat > restart.sh <<'EOF'
 #!/bin/bash
 echo "Restarting Krea Speed Test Server..."
-COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose restart
+docker-compose restart
 echo "Services restarted."
 EOF
     
@@ -578,8 +633,35 @@ EOF
     # Manual backup script
     cat > backup-now.sh <<EOF
 #!/bin/bash
+
+# Parse command line arguments
+FORCE_NO_TTY=false
+while [[ \$# -gt 0 ]]; do
+    case \$1 in
+        --no-tty)
+            FORCE_NO_TTY=true
+            export DOCKER_NONINTERACTIVE=1
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+# Docker Compose wrapper for non-interactive environments
+docker_exec() {
+    if [[ "\${FORCE_NO_TTY}" == "true" ]] || [[ "\${DOCKER_NONINTERACTIVE}" == "1" ]]; then
+        docker-compose exec -T "\$@"
+    elif [ -t 0 ]; then
+        docker-compose exec "\$@"
+    else
+        docker-compose exec -T "\$@"
+    fi
+}
+
 echo "Running manual backup..."
-docker-compose exec mysql sh -c "
+docker_exec mysql sh -c "
     mysqldump -u speedtest -p${MYSQL_DB_PASSWORD} speedtest > /var/backup/manual_backup_\$(date +%Y%m%d_%H%M%S).sql &&
     gzip /var/backup/manual_backup_\$(date +%Y%m%d_%H%M%S).sql &&
     echo 'Manual backup completed successfully'
@@ -591,8 +673,40 @@ EOF
     # Restore script
     cat > restore.sh <<'EOF'
 #!/bin/bash
-if [[ -z "$1" ]]; then
-    echo "Usage: $0 <backup_file.sql.gz>"
+
+# Parse command line arguments
+FORCE_NO_TTY=false
+BACKUP_FILE=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --no-tty)
+            FORCE_NO_TTY=true
+            export DOCKER_NONINTERACTIVE=1
+            shift
+            ;;
+        *)
+            if [[ -z "$BACKUP_FILE" ]]; then
+                BACKUP_FILE="$1"
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Docker Compose wrapper for non-interactive environments
+docker_exec() {
+    if [[ "${FORCE_NO_TTY}" == "true" ]] || [[ "${DOCKER_NONINTERACTIVE}" == "1" ]]; then
+        docker-compose exec -T "$@"
+    elif [ -t 0 ]; then
+        docker-compose exec "$@"
+    else
+        docker-compose exec -T "$@"
+    fi
+}
+
+if [[ -z "$BACKUP_FILE" ]]; then
+    echo "Usage: $0 [--no-tty] <backup_file.sql.gz>"
     echo "Available backups:"
     ls -lah /var/backup/speed-test-server/*.sql.gz 2>/dev/null || echo "No backups found"
     exit 1
@@ -608,7 +722,7 @@ echo "Restoring database from: $BACKUP_FILE"
 echo "WARNING: This will overwrite the current database!"
 read -p "Are you sure? (yes/no): " -r
 if [[ $REPLY == "yes" ]]; then
-    docker-compose exec mysql sh -c "
+    docker_exec mysql sh -c "
         zcat /var/backup/$(basename $BACKUP_FILE) | mysql -u speedtest -p${MYSQL_DB_PASSWORD} speedtest
     "
     echo "Database restored successfully"
@@ -620,9 +734,36 @@ EOF
     # SSL renewal script
     cat > renew-ssl.sh <<'EOF'
 #!/bin/bash
+
+# Parse command line arguments
+FORCE_NO_TTY=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --no-tty)
+            FORCE_NO_TTY=true
+            export DOCKER_NONINTERACTIVE=1
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+# Docker Compose wrapper for non-interactive environments
+docker_exec() {
+    if [[ "${FORCE_NO_TTY}" == "true" ]] || [[ "${DOCKER_NONINTERACTIVE}" == "1" ]]; then
+        docker-compose exec -T "$@"
+    elif [ -t 0 ]; then
+        docker-compose exec "$@"
+    else
+        docker-compose exec -T "$@"
+    fi
+}
+
 echo "Renewing SSL certificates..."
 docker-compose run --rm certbot renew
-docker-compose exec nginx nginx -s reload
+docker_exec nginx nginx -s reload
 echo "SSL renewal completed"
 EOF
     
@@ -631,11 +772,11 @@ EOF
 #!/bin/bash
 echo "Updating Krea Speed Test Server..."
 echo "1. Pulling latest images..."
-COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose pull
+docker-compose pull
 echo "2. Rebuilding application..."
-COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose build --no-cache app
+docker-compose build --no-cache app
 echo "3. Restarting services..."
-COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose up -d
+docker-compose up -d
 echo "Update completed!"
 EOF
     
@@ -673,34 +814,42 @@ EOF
 deploy_services() {
     log_info "Deploying services with Docker Compose..."
     
-    # Build and start services without TTY allocation
-    COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose build
-    COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose up -d mysql
+    # Check if we're in an interactive environment
+    if [ -t 0 ]; then
+        DOCKER_COMPOSE_FLAGS=""
+    else
+        export COMPOSE_INTERACTIVE_NO_CLI=1
+        DOCKER_COMPOSE_FLAGS=""
+    fi
+    
+    # Build and start services
+    docker-compose build
+    docker-compose up -d mysql
     
     # Wait for MySQL to be ready
     log_info "Waiting for MySQL to be ready..."
     sleep 30
     
     # Start application
-    COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose up -d app
+    docker-compose up -d app
     
     # Wait for application to be ready
     log_info "Waiting for application to be ready..."
     sleep 20
     
     # Start nginx (without SSL first)
-    COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose up -d nginx
+    docker-compose up -d nginx
     
     # Initialize SSL certificates
     log_info "Initializing SSL certificates..."
     sleep 10
-    COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose run --rm certbot
+    docker-compose run --rm certbot
     
     # Reload nginx with SSL
-    COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose exec -T nginx nginx -s reload
+    docker_exec nginx nginx -s reload
     
     # Start backup service
-    COMPOSE_INTERACTIVE_NO_CLI=1 docker-compose up -d backup
+    docker-compose up -d backup
     
     log_success "All services deployed and running"
 }
@@ -712,7 +861,7 @@ setup_admin_user() {
     sleep 10
     
     # Insert admin API key into database
-    docker-compose exec mysql mysql -u speedtest -p"$MYSQL_DB_PASSWORD" speedtest <<EOF
+    docker_exec mysql mysql -u speedtest -p"$MYSQL_DB_PASSWORD" speedtest <<EOF
 INSERT INTO api_keys (api_key, name, is_active, rate_limit_per_hour, created_at, updated_at) 
 VALUES ('$ADMIN_API_KEY', 'admin', 1, 10000, NOW(), NOW()) 
 ON DUPLICATE KEY UPDATE 
@@ -797,6 +946,19 @@ AUTO-FEATURES:
 - Daily MySQL backups at 2:00 AM
 - SSL certificate auto-renewal every 40 days
 - 30-day backup retention
+
+TROUBLESHOOTING:
+If you see "the input device is not a TTY" errors:
+1. Use the --no-tty flag: ./deploy.sh --no-tty yourdomain.com
+2. Or use the wrapper: ./deploy-no-tty.sh yourdomain.com
+3. Or try: export DOCKER_NONINTERACTIVE=1
+4. For individual commands: ./backup-now.sh --no-tty
+
+For deployment issues:
+- Check Docker is running: docker --version
+- Check Docker Compose: docker-compose --version
+- View logs: ./logs.sh [service]
+- Check status: ./status.sh
 - Health checks for all services
 
 BACKUP LOCATION: $BACKUP_DIR

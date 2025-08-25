@@ -34,7 +34,20 @@ curl -fsSL https://raw.githubusercontent.com/Krea-University/speed-test-server/m
    ssh root@your-server "cd /tmp/speed-test-server && ./deploy.sh yourdomain.com admin@yourdomain.com"
    ```
 
-3. **Access your application**:
+3. **For environments without TTY (CI/CD, automation)**:
+   ```bash
+   # Option 1: Use --no-tty flag
+   ./deploy.sh --no-tty yourdomain.com admin@yourdomain.com
+   
+   # Option 2: Use dedicated no-TTY wrapper
+   ./deploy-no-tty.sh yourdomain.com admin@yourdomain.com
+   
+   # Option 3: Set environment variable
+   export DOCKER_NONINTERACTIVE=1
+   ./deploy.sh yourdomain.com admin@yourdomain.com
+   ```
+
+4. **Access your application**:
    ```
    🌐 Application: https://yourdomain.com
    📚 API Docs: https://yourdomain.com/swagger/index.html
@@ -504,12 +517,68 @@ services:
 
 ---
 
+## 🛠️ Troubleshooting
+
+### TTY Issues
+
+If you encounter "the input device is not a TTY" errors during deployment:
+
+```bash
+# Option 1: Use --no-tty flag
+./deploy.sh --no-tty yourdomain.com
+
+# Option 2: Use dedicated no-TTY wrapper
+./deploy-no-tty.sh yourdomain.com
+
+# Option 3: Force non-interactive mode with environment variable
+export DOCKER_NONINTERACTIVE=1
+./deploy.sh yourdomain.com
+
+# Option 4: For individual management scripts
+./backup-now.sh --no-tty
+./restore.sh --no-tty backup_file.sql.gz
+./renew-ssl.sh --no-tty
+```
+
+### Automated Deployment (CI/CD)
+
+For automated deployments without user interaction:
+
+```bash
+# Jenkins, GitHub Actions, GitLab CI, etc.
+export DOCKER_NONINTERACTIVE=1
+export DEBIAN_FRONTEND=noninteractive
+./deploy-no-tty.sh yourdomain.com admin@yourdomain.com
+```
+
+### Common Issues
+
+- **Docker not found**: Install Docker and Docker Compose first
+- **Permission denied**: Run deployment script as root (`sudo`)
+- **Port conflicts**: Ensure ports 80, 443, 3306, 8080 are available
+- **SSL certificate issues**: Check domain DNS points to server IP
+
+### Log Analysis
+
+```bash
+# View service logs
+./logs.sh app        # Application logs
+./logs.sh mysql      # Database logs
+./logs.sh nginx      # Web server logs
+./logs.sh backup     # Backup service logs
+
+# Check service status
+./status.sh
+```
+
+---
+
 ## Roadmap
 
-* [ ] Multi-threaded chunked download for even smoother graphs
-* [ ] Persistent metrics logging
-* [ ] Admin dashboard for server load & test history
-* [ ] Rate limiting per client
+* [x] Multi-threaded chunked download for even smoother graphs
+* [x] Persistent metrics logging
+* [x] Admin dashboard for server load & test history
+* [x] Rate limiting per client
 
 ---
 
