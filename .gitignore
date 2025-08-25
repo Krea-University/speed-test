@@ -30,3 +30,17 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Build artifacts
+bin/
+dist/
+tmp/
+speed-test
+client/client
+
+# Development tools
+build-errors.log
+coverage.html
+
+# Air live reload tool
+.air.toml.bak

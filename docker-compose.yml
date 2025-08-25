@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: speedtest-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: speedtest
+      MYSQL_USER: speedtest
+      MYSQL_PASSWORD: speedtest
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./migrations:/docker-entrypoint-initdb.d
+    networks:
+      - speedtest-network
+
+  # Speed Test Server
+  speed-test:
+    build: .
+    container_name: speedtest-server
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - DATABASE_URL=speedtest:speedtest@tcp(mysql:3306)/speedtest?charset=utf8mb4&parseTime=True&loc=Local
+      - IPINFO_TOKEN=20e16b08cd509a
+      - RATE_LIMIT_ENABLED=true
+    depends_on:
+      - mysql
+    networks:
+      - speedtest-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Adminer for database management (optional)
+  adminer:
+    image: adminer
+    container_name: speedtest-adminer
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    networks:
+      - speedtest-network
+
+volumes:
+  mysql_data:
+
+networks:
+  speedtest-network:
+    driver: bridge

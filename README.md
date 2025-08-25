@@ -4,35 +4,114 @@ Krea Speed Test Server is a lightweight Golang service for self-hosted internet 
 
 ---
 
-## Features
+# Krea Speed Test Server
 
-* **Latency & Jitter**
-
-  * `/ping` for round-trip latency
-  * `/ws` WebSocket beacons for jitter measurement
-
-* **Download Speed**
-
-  * `/download?size=...` streams random data for throughput tests
-  * Parallelizable for realistic load
-
-* **Upload Speed**
-
-  * `/upload` accepts arbitrary bytes and counts total received
-
-* **IP Lookup**
-
-  * `/ip` returns client’s public IP, ASN, ISP, and location (if provider configured)
-
-* **Server Metadata**
-
-  * `/healthz` for liveness checks
-  * `/version` for release version or git hash
-  * `/config` to share test parameters with clients
+Krea Speed Test Server is a lightweight, professionally-architected Golang service for self-hosted internet speed testing. It provides endpoints to measure latency, jitter, download, and upload speeds, as well as comprehensive IP geolocation with multiple provider fallbacks. Designed for reliability, performance, and ease of deployment.
 
 ---
 
-## Endpoints
+## ✨ Features
+
+* **🚀 Speed Testing**
+  * `/ping` for round-trip latency measurement
+  * `/ws` WebSocket endpoint for jitter measurement
+  * `/download?size=...` streams random data for throughput tests
+  * `/upload` accepts arbitrary bytes for upload speed testing
+
+* **🌍 IP Geolocation**
+  * `/ip` returns comprehensive IP information with automatic provider fallback
+  * **Multiple providers**: ipinfo.io → ip-api.com → freeipapi.com
+  * **Rich data**: IP, city, region, country, ISP, ASN, timezone, postal code
+
+* **📊 Server Information**
+  * `/healthz` for health checks and monitoring
+  * `/version` for application version information
+  * `/config` for client configuration sharing
+
+* **🏗️ Professional Architecture**
+  * Clean, modular codebase with proper separation of concerns
+  * Comprehensive error handling and logging
+  * Graceful shutdown and signal handling
+  * Security headers and CORS support
+  * Docker support with multi-stage builds
+
+---
+
+## 📁 Project Structure
+
+The project follows Go best practices with a clean, modular architecture:
+
+```
+speed-test/
+├── cmd/speed-test/         # Application entry point
+│   └── main.go
+├── internal/               # Private application code
+│   ├── config/            # Configuration constants
+│   ├── handlers/          # HTTP request handlers
+│   ├── ipservice/         # IP geolocation providers
+│   ├── middleware/        # HTTP middleware
+│   ├── server/           # Server setup and routing
+│   └── types/            # Data structures
+├── client/               # Example client implementation
+├── docs/                # Additional documentation
+├── Dockerfile           # Container configuration
+├── Makefile            # Build automation
+└── README.md           # This file
+```
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+* Go 1.21+ 
+* (Optional) Docker for containerized deployment
+
+### Build and Run
+
+```bash
+# Clone the repository
+git clone https://github.com/Krea-University/speed-test.git
+cd speed-test
+
+# Build and run using Make
+make build
+make run
+
+# Or run directly
+go run ./cmd/speed-test
+```
+
+The server will start on port 8080 by default.
+
+---
+
+## 🔧 Configuration
+
+### Environment Variables
+
+| Variable      | Default | Description                           |
+|---------------|---------|---------------------------------------|
+| `PORT`        | 8080    | HTTP server port                      |
+| `IPINFO_TOKEN`| (provided) | ipinfo.io API token (optional)    |
+
+### Setup
+
+1. Copy the example environment file:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Edit `.env` with your preferred settings:
+   ```bash
+   PORT=8080
+   IPINFO_TOKEN=your_token_here
+   ```
+
+---
+
+## 🌐 API Endpoints
 
 ### `GET /ping`
 
@@ -48,27 +127,34 @@ Useful for measuring download throughput.
 Accepts raw body data, discards it, and returns total bytes received.
 Used to measure upload throughput.
 
-### `GET /ws`
-
-WebSocket endpoint. Sends server timestamps periodically (100 ms default).
-Clients can measure jitter based on arrival deltas.
-
 ### `GET /ip`
 
-Returns client IP and optional geolocation info.
-Example:
+Returns comprehensive client IP information with automatic provider fallback.
 
+**Example Response:**
 ```json
 {
-  "ip": "203.0.113.25",
-  "asn": "AS13335",
-  "org": "Example ISP",
-  "city": "Singapore",
-  "region": "Singapore",
-  "country": "SG",
-  "loc": "1.2897,103.8501"
+  "ip": "8.8.8.8",
+  "city": "Mountain View",
+  "region": "California",
+  "country": "US", 
+  "location": "37.4056,-122.0775",
+  "postal": "94043",
+  "timezone": "America/Los_Angeles",
+  "isp": "Google LLC",
+  "asn": "AS15169 Google LLC",
+  "source": "ipinfo.io"
 }
 ```
+
+**Provider Fallback Chain:**
+1. **ipinfo.io** - Primary provider with detailed information
+2. **ip-api.com** - Secondary provider, free service
+3. **freeipapi.com** - Tertiary provider for basic geolocation
+
+### `GET /ws`
+
+WebSocket endpoint for jitter measurement. Clients can send messages and receive echoed responses with server timestamps for precise timing analysis.
 
 ### `GET /healthz`
 
@@ -90,40 +176,126 @@ Returns version string or git commit hash.
 ### Clone and build
 
 ```bash
-git clone https://github.com/your-org/krea-speedtest-server.git
-cd krea-speedtest-server
+git clone https://github.com/Krea-University/speed-test.git
+cd speed-test
 go mod tidy
-go build -o krea-speedtest
+go build -o speed-test .
 ```
 
 ### Run
 
 ```bash
-./krea-speedtest
+./speed-test
 ```
 
 By default, server listens on `:8080`.
 
----
+### Using Make
 
-## Configuration
-
-Environment variables:
-
-| Variable             | Default           | Description                                                 |
-| -------------------- | ----------------- | ----------------------------------------------------------- |
-| `PORT`               | 8080              | Port to listen on                                           |
-| `IP_PROVIDER`        | none              | `none`, `ipinfo`, `ip-api`, `ipapi_co`, `ipwhois`, `custom` |
-| `IP_TOKEN`           | -                 | API token (if provider requires)                            |
-| `IP_CUSTOM_URL`      | -                 | Custom provider endpoint, `{ip}` placeholder supported      |
-| `MAX_DOWNLOAD_SIZE`  | 52428800 (50 MiB) | Default download size                                       |
-| `UPLOAD_READ_BUFFER` | 262144            | Read buffer size in bytes                                   |
-| `WS_INTERVAL_MS`     | 100               | Interval for WebSocket jitter packets                       |
-
-Example:
+The project includes a Makefile for common tasks:
 
 ```bash
-PORT=8080 IP_PROVIDER=ipinfo IP_TOKEN=your_token ./krea-speedtest
+# Build the application
+make build
+
+# Run the application
+make run
+
+# Run tests
+make test
+
+# Format code
+make fmt
+
+# Clean build artifacts
+make clean
+
+# Build Docker image
+make docker-build
+
+# Run Docker container
+make docker-run
+```
+
+---
+
+## 🧪 Testing & Development
+
+### Run Tests
+
+```bash
+# Run all tests
+make test
+
+# Run tests with coverage
+make test-coverage
+
+# Run benchmarks  
+make bench
+```
+
+### Development Mode
+
+```bash
+# Install development tools
+make dev-tools
+
+# Run with live reload
+make dev
+```
+
+### Using the Test Client
+
+```bash
+cd client
+go run main.go
+```
+
+This will run a comprehensive speed test against your server and display results.
+
+---
+
+## 🌍 IP Geolocation Providers
+
+The server uses multiple IP geolocation providers with automatic fallback:
+
+### Provider Details
+
+| Provider | Type | Rate Limits | Data Quality | API Key Required |
+|----------|------|-------------|--------------|------------------|
+| **ipinfo.io** | Primary | 50k/month free | Excellent | Yes (free tier) |
+| **ip-api.com** | Secondary | 45 req/min | Good | No |  
+| **freeipapi.com** | Tertiary | Unlimited | Basic | No |
+
+### Fallback Behavior
+
+1. **Primary**: Attempts ipinfo.io with your API token
+2. **Secondary**: Falls back to ip-api.com if primary fails
+3. **Tertiary**: Uses freeipapi.com if secondary fails  
+4. **Graceful**: Returns basic IP info if all providers fail
+
+See [docs/API_PROVIDERS.md](docs/API_PROVIDERS.md) for detailed provider information.
+
+---
+
+## 🛠️ Development
+
+### Available Make Commands
+
+```bash
+make build          # Build the application
+make run            # Run the application  
+make test           # Run tests
+make test-coverage  # Run tests with coverage
+make clean          # Clean build artifacts
+make fmt            # Format code
+make lint           # Lint code
+make deps           # Install dependencies
+make dev            # Development mode with live reload
+make dev-tools      # Install development tools
+make docker-build   # Build Docker image
+make docker-run     # Run Docker container
+make build-all      # Build for multiple platforms
 ```
 
 ---
@@ -138,18 +310,43 @@ speed.krea.edu.in {
 }
 ```
 
-### With Docker
+---
 
-```Dockerfile
-FROM golang:1.21 as build
-WORKDIR /app
-COPY . .
-RUN go build -o krea-speedtest
+## 🐳 Docker Deployment
 
-FROM gcr.io/distroless/base
-COPY --from=build /app/krea-speedtest /krea-speedtest
-EXPOSE 8080
-CMD ["/krea-speedtest"]
+### Using Docker
+
+```bash
+# Build the image
+make docker-build
+
+# Run the container
+make docker-run
+```
+
+### Manual Docker Commands
+
+```bash
+# Build
+docker build -t speed-test .
+
+# Run with port mapping
+docker run -p 8080:8080 -e IPINFO_TOKEN=your_token speed-test
+```
+
+### With Docker Compose
+
+```yaml
+version: '3.8'
+services:
+  speed-test:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - IPINFO_TOKEN=your_token_here
+    restart: unless-stopped
 ```
 
 ---

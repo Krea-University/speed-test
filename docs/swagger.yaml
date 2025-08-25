@@ -1,0 +1,297 @@
+definitions:
+  models.OoklaCompatibleResponse:
+    properties:
+      download:
+        $ref: '#/definitions/models.OoklaSpeedResult'
+      interface:
+        $ref: '#/definitions/models.OoklaInterfaceInfo'
+      ping:
+        $ref: '#/definitions/models.OoklaPingResult'
+      result:
+        $ref: '#/definitions/models.OoklaResultInfo'
+      server:
+        $ref: '#/definitions/models.OoklaServerInfo'
+      timestamp:
+        type: string
+      type:
+        type: string
+      upload:
+        $ref: '#/definitions/models.OoklaSpeedResult'
+    type: object
+  models.OoklaInterfaceInfo:
+    properties:
+      externalIp:
+        type: string
+      internalIp:
+        type: string
+      isVpn:
+        type: boolean
+      macAddr:
+        type: string
+      name:
+        type: string
+    type: object
+  models.OoklaPingResult:
+    properties:
+      high:
+        type: number
+      jitter:
+        type: number
+      latency:
+        type: number
+      low:
+        type: number
+    type: object
+  models.OoklaResultInfo:
+    properties:
+      id:
+        type: string
+      url:
+        type: string
+    type: object
+  models.OoklaServerInfo:
+    properties:
+      cc:
+        type: string
+      country:
+        type: string
+      distance:
+        type: number
+      host:
+        type: string
+      id:
+        type: integer
+      latency:
+        type: number
+      location:
+        type: string
+      name:
+        type: string
+      port:
+        type: integer
+      sponsor:
+        type: string
+    type: object
+  models.OoklaSpeedResult:
+    properties:
+      bandwidth:
+        description: bits per second
+        type: integer
+      bytes:
+        type: integer
+      elapsed:
+        description: milliseconds
+        type: integer
+      latency:
+        type: number
+    type: object
+  models.SpeedTest:
+    properties:
+      city:
+        type: string
+      client_ip:
+        type: string
+      country:
+        type: string
+      created_at:
+        type: string
+      download_size_bytes:
+        type: integer
+      download_speed_mbps:
+        type: number
+      id:
+        type: string
+      isp:
+        type: string
+      jitter_ms:
+        type: number
+      ping_latency_ms:
+        type: number
+      region:
+        type: string
+      server_city:
+        type: string
+      server_country:
+        type: string
+      server_name:
+        type: string
+      sponsor:
+        type: string
+      test_duration_seconds:
+        type: number
+      test_type:
+        type: string
+      updated_at:
+        type: string
+      upload_size_bytes:
+        type: integer
+      upload_speed_mbps:
+        type: number
+      user_agent:
+        type: string
+    type: object
+  types.PingResponse:
+    properties:
+      timestamp:
+        description: Server timestamp in nanoseconds
+        type: integer
+    type: object
+info:
+  contact: {}
+paths:
+  /api/tests:
+    get:
+      description: Retrieves all speed test records with pagination support
+      parameters:
+      - default: 50
+        description: Number of records to return
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Number of records to skip
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.SpeedTest'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get all speed tests
+      tags:
+      - API
+    post:
+      consumes:
+      - application/json
+      description: Creates a new speed test record and returns the test ID
+      parameters:
+      - description: Speed test data
+        in: body
+        name: test
+        required: true
+        schema:
+          $ref: '#/definitions/models.SpeedTest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Create a new speed test
+      tags:
+      - API
+  /api/tests/{id}:
+    get:
+      description: Retrieves a specific speed test record by its ID
+      parameters:
+      - description: Speed test ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.SpeedTest'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get speed test by ID
+      tags:
+      - API
+  /ping:
+    get:
+      description: Returns server timestamp in nanoseconds for latency calculation
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/types.PingResponse'
+      summary: Ping endpoint for latency measurement
+      tags:
+      - Speed Test
+  /result/{id}:
+    get:
+      description: Retrieves a speed test result in Ookla speedtest.net compatible
+        format
+      parameters:
+      - description: Speed test ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.OoklaCompatibleResponse'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get speed test in Ookla format
+      tags:
+      - Public
+swagger: "2.0"
