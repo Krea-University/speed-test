@@ -35,15 +35,15 @@ cd "$TEMP_DIR"
 echo "Downloading deployment files..."
 
 # Download only the essential files needed for deployment
-curl -fsSL "https://raw.githubusercontent.com/Krea-University/speed-test/main/deploy-no-tty.sh" -o deploy-no-tty.sh
+curl -fsSL "https://raw.githubusercontent.com/Krea-University/speed-test/main/deploy.sh" -o deploy.sh
 
 # Make executable
-chmod +x deploy-no-tty.sh
+chmod +x deploy.sh
 
 echo "Starting deployment..."
 
-# Execute with forced non-interactive mode
-bash deploy-no-tty.sh "$DOMAIN" "$EMAIL"
+# Execute with forced non-interactive mode and --no-tty flag
+bash deploy.sh --no-tty "$DOMAIN" "$EMAIL"
 
 echo "Installation completed successfully!"
 echo "Cleaning up temporary files..."

@@ -856,7 +856,11 @@ docker_exec() {
 }
 
 echo "Renewing SSL certificates..."
-docker-compose run --rm certbot renew
+if [[ "${FORCE_NO_TTY}" == "true" ]] || [[ "${DOCKER_NONINTERACTIVE}" == "1" ]] || [[ ! -t 0 ]]; then
+    docker-compose run --rm -T certbot renew
+else
+    docker-compose run --rm certbot renew
+fi
 docker_exec nginx nginx -s reload
 echo "SSL renewal completed"
 EOF
@@ -937,7 +941,13 @@ deploy_services() {
     # Initialize SSL certificates
     log_info "Initializing SSL certificates..."
     sleep 10
-    docker-compose run --rm certbot
+    
+    # Run certbot without TTY allocation
+    if [[ "$FORCE_NO_TTY" == "true" ]] || [[ ! -t 0 ]]; then
+        docker-compose run --rm -T certbot
+    else
+        docker-compose run --rm certbot
+    fi
     
     # Reload nginx with SSL
     docker_exec_safe nginx nginx -s reload
