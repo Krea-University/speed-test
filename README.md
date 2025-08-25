@@ -10,6 +10,50 @@ Krea Speed Test Server is a lightweight, professionally-architected Golang servi
 
 ---
 
+## 🚀 **Quick Install & Deploy**
+
+### One-Command Production Deployment
+
+```bash
+# Download and run the installation script
+curl -fsSL https://raw.githubusercontent.com/Krea-University/speed-test/main/install.sh | bash -s -- yourdomain.com admin@yourdomain.com
+```
+
+### Manual Installation
+
+1. **Clone and prepare**:
+   ```bash
+   git clone https://github.com/Krea-University/speed-test.git
+   cd speed-test
+   ./prepare-deploy.sh
+   ```
+
+2. **Deploy to server**:
+   ```bash
+   scp -r /tmp/speed-test root@your-server:/tmp/
+   ssh root@your-server "cd /tmp/speed-test && ./deploy.sh yourdomain.com admin@yourdomain.com"
+   ```
+
+3. **Access your application**:
+   ```
+   🌐 Application: https://yourdomain.com
+   📚 API Docs: https://yourdomain.com/swagger/index.html
+   💓 Health: https://yourdomain.com/healthz
+   ```
+
+### What You Get
+
+✅ **Docker containers** with auto-restart  
+✅ **Daily MySQL backups** at `/var/backup/speed-test/`  
+✅ **SSL certificates** with auto-renewal (Let's Encrypt)  
+✅ **Nginx reverse proxy** with security headers  
+✅ **Admin API key** auto-generated  
+✅ **Rate limiting** and authentication  
+✅ **Swagger documentation** built-in  
+✅ **Health monitoring** for all services  
+
+---
+
 ## ✨ Features
 
 * **🚀 Speed Testing**
@@ -300,7 +344,86 @@ make build-all      # Build for multiple platforms
 
 ---
 
-## Deployment
+## 🚀 Production Deployment
+
+### Docker Production Deployment (Recommended)
+
+The application includes a comprehensive Docker-based production deployment with:
+
+- **Auto-restart**: All containers restart automatically unless stopped
+- **Daily MySQL backups**: Automated backups at 2:00 AM stored in `/var/backup/speed-test`
+- **SSL with auto-renewal**: Let's Encrypt certificates renewed every 40 days
+- **Health monitoring**: Built-in health checks for all services
+- **Easy management**: Simple scripts for common operations
+
+#### Quick Deployment
+
+1. **Prepare your server** (Ubuntu/CentOS with Docker):
+   ```bash
+   # Run this script to prepare deployment package
+   ./prepare-deploy.sh
+   ```
+
+2. **Copy to your server**:
+   ```bash
+   scp -r /tmp/speed-test root@your-server:/tmp/
+   ```
+
+3. **Deploy on server**:
+   ```bash
+   ssh root@your-server
+   cd /tmp/speed-test
+   ./deploy.sh speedtest.yourdomain.com admin@yourdomain.com
+   ```
+
+#### Management Commands
+
+After deployment, use these commands in `/opt/speed-test/`:
+
+```bash
+# Service Management
+./start.sh          # Start all services
+./stop.sh           # Stop all services  
+./restart.sh        # Restart all services
+./status.sh         # Check service status
+./logs.sh [service] # View logs (app, mysql, nginx, backup)
+
+# Backup & Restore
+./backup-now.sh     # Manual backup
+./restore.sh file   # Restore from backup
+ls /var/backup/speed-test/  # View backups
+
+# SSL & Updates
+./renew-ssl.sh      # Renew SSL certificates
+./update.sh         # Update application
+```
+
+#### Auto-Features
+
+- **Auto-restart**: Containers restart automatically on failure or reboot
+- **Daily backups**: MySQL data backed up daily at 2:00 AM
+- **SSL renewal**: Certificates renewed automatically every 40 days  
+- **Health checks**: All services monitored for health
+- **30-day backup retention**: Old backups cleaned up automatically
+
+#### Backup Location
+
+All MySQL backups are stored in `/var/backup/speed-test/` with the format:
+- `speedtest_backup_YYYYMMDD_HHMMSS.sql.gz` (daily automated)
+- `manual_backup_YYYYMMDD_HHMMSS.sql.gz` (manual backups)
+
+### Alternative: Docker Compose Only
+
+For development or custom deployments:
+
+```bash
+# Use the specialized Docker deployment script
+./deploy-docker.sh yourdomain.com admin@yourdomain.com
+```
+
+---
+
+## Development Deployment
 
 ### With Caddy (TLS + HTTP/2)
 
@@ -312,7 +435,7 @@ speed.krea.edu.in {
 
 ---
 
-## 🐳 Docker Deployment
+## 🐳 Development Docker
 
 ### Using Docker
 
@@ -334,7 +457,7 @@ docker build -t speed-test .
 docker run -p 8080:8080 -e IPINFO_TOKEN=your_token speed-test
 ```
 
-### With Docker Compose
+### With Docker Compose (Development)
 
 ```yaml
 version: '3.8'
