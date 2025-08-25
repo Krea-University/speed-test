@@ -445,8 +445,277 @@ create_nginx_config() {
         rm -rf nginx.conf
     fi
     
-    # Create nginx.conf file with error checking
-    cat > nginx.conf <<EOF
+    # Create HTTP-only nginx.conf initially (before SSL certificates exist)
+    cat > nginx-http.conf <<EOF
+events {
+    worker_connections 1024;
+    use epoll;
+    multi_accept on;
+}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+
+    # Logging
+    log_format main '\$remote_addr - \$remote_user [\$time_local] "\$request" '
+                    '\$status \$body_bytes_sent "\$http_referer" '
+                    '"\$http_user_agent" "\$http_x_forwarded_for" '
+                    'rt=\$request_time uct="\$upstream_connect_time" '
+                    'uht="\$upstream_header_time" urt="\$upstream_response_time"';
+
+    access_log /var/log/nginx/access.log main;
+    error_log /var/log/nginx/error.log warn;
+
+    # Performance
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+    types_hash_max_size 2048;
+    client_max_body_size 100M;
+    
+    # Gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml text/javascript application/javascript application/xml+rss application/json;
+    
+    # Rate limiting zones
+    limit_req_zone \$binary_remote_addr zone=api:10m rate=10r/s;
+    limit_req_zone \$binary_remote_addr zone=general:10m rate=30r/s;
+
+    # HTTP server
+    server {
+        listen 80;
+        server_name ${DOMAIN};
+
+        # Let's Encrypt challenge
+        location /.well-known/acme-challenge/ {
+            root /var/www/certbot;
+        }
+
+        # Application traffic (temporarily on HTTP until SSL is set up)
+        location / {
+            limit_req zone=general burst=50 nodelay;
+            
+            proxy_pass http://app:8080;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade \$http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_cache_bypass \$http_upgrade;
+            
+            # Timeouts
+            proxy_connect_timeout 30s;
+            proxy_send_timeout 30s;
+            proxy_read_timeout 30s;
+        }
+
+        # API endpoints
+        location /api/ {
+            limit_req zone=api burst=20 nodelay;
+            limit_req_status 429;
+            
+            proxy_pass http://app:8080;
+            proxy_http_version 1.1;
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+            
+            proxy_connect_timeout 30s;
+            proxy_send_timeout 30s;
+            proxy_read_timeout 30s;
+        }
+
+        # WebSocket support
+        location /ws {
+            limit_req zone=general burst=10 nodelay;
+            
+            proxy_pass http://app:8080;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade \$http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+            
+            proxy_read_timeout 3600s;
+            proxy_send_timeout 3600s;
+        }
+
+        # Health check endpoint
+        location /healthz {
+            proxy_pass http://app:8080;
+            access_log off;
+        }
+    }
+}
+EOF
+
+    # Copy HTTP-only config as the initial nginx.conf
+    cp nginx-http.conf nginx.conf
+
+    # Create full SSL nginx configuration for after certificates are obtained
+    cat > nginx-ssl.conf <<EOF
+events {
+    worker_connections 1024;
+    use epoll;
+    multi_accept on;
+}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+
+    # Logging
+    log_format main '\$remote_addr - \$remote_user [\$time_local] "\$request" '
+                    '\$status \$body_bytes_sent "\$http_referer" '
+                    '"\$http_user_agent" "\$http_x_forwarded_for" '
+                    'rt=\$request_time uct="\$upstream_connect_time" '
+                    'uht="\$upstream_header_time" urt="\$upstream_response_time"';
+
+    access_log /var/log/nginx/access.log main;
+    error_log /var/log/nginx/error.log warn;
+
+    # Performance
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+    types_hash_max_size 2048;
+    client_max_body_size 100M;
+    
+    # Gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml text/javascript application/javascript application/xml+rss application/json;
+    
+    # Rate limiting zones
+    limit_req_zone \$binary_remote_addr zone=api:10m rate=10r/s;
+    limit_req_zone \$binary_remote_addr zone=general:10m rate=30r/s;
+
+    # HTTP server (redirect to HTTPS)
+    server {
+        listen 80;
+        server_name ${DOMAIN};
+
+        # Let's Encrypt challenge
+        location /.well-known/acme-challenge/ {
+            root /var/www/certbot;
+        }
+
+        # Redirect all other traffic to HTTPS
+        location / {
+            return 301 https://\$server_name\$request_uri;
+        }
+    }
+
+    # HTTPS server
+    server {
+        listen 443 ssl;
+        http2 on;
+        server_name ${DOMAIN};
+
+        # SSL Configuration
+        ssl_certificate /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+        
+        # SSL Security
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384;
+        ssl_prefer_server_ciphers off;
+        ssl_session_cache shared:SSL:10m;
+        ssl_session_timeout 10m;
+        
+        # Security headers
+        add_header X-Frame-Options DENY always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" always;
+
+        # Rate limiting for API endpoints
+        location /api/ {
+            limit_req zone=api burst=20 nodelay;
+            limit_req_status 429;
+            
+            proxy_pass http://app:8080;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade \$http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_cache_bypass \$http_upgrade;
+            
+            # Timeouts
+            proxy_connect_timeout 30s;
+            proxy_send_timeout 30s;
+            proxy_read_timeout 30s;
+        }
+
+        # WebSocket support with rate limiting
+        location /ws {
+            limit_req zone=general burst=10 nodelay;
+            
+            proxy_pass http://app:8080;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade \$http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+            
+            # WebSocket timeouts
+            proxy_read_timeout 3600s;
+            proxy_send_timeout 3600s;
+        }
+
+        # General application traffic
+        location / {
+            limit_req zone=general burst=50 nodelay;
+            
+            proxy_pass http://app:8080;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade \$http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_cache_bypass \$http_upgrade;
+            
+            # Timeouts
+            proxy_connect_timeout 30s;
+            proxy_send_timeout 30s;
+            proxy_read_timeout 30s;
+        }
+
+        # Static files caching
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+            access_log off;
+        }
+        
+        # Health check endpoint (no rate limiting)
+        location /healthz {
+            proxy_pass http://app:8080;
+            access_log off;
+        }
+    }
+}
+EOF
 events {
     worker_connections 1024;
     use epoll;
@@ -602,15 +871,16 @@ EOF
 
     # Check if the file creation was successful
     if [[ $? -ne 0 ]]; then
-        log_error "Failed to create nginx.conf - check permissions and disk space"
+        log_error "Failed to create nginx configurations - check permissions and disk space"
         exit 1
     fi
 
-    # Verify nginx.conf was created successfully
-    if [[ -f "nginx.conf" ]]; then
-        log_success "Nginx configuration created successfully"
+    # Verify nginx configurations were created successfully
+    if [[ -f "nginx.conf" ]] && [[ -f "nginx-ssl.conf" ]] && [[ -f "nginx-http.conf" ]]; then
+        log_success "Nginx configurations created successfully (HTTP-only mode initially)"
+        log_info "SSL configuration ready for activation after certificate generation"
     else
-        log_error "Failed to create nginx.conf file"
+        log_error "Failed to create nginx configuration files"
         exit 1
     fi
 }
@@ -1094,22 +1364,56 @@ deploy_services() {
     log_info "Waiting for application to be ready..."
     sleep 20
     
-    # Start nginx (without SSL first)
+    # Start nginx with HTTP-only configuration first
+    log_info "Starting nginx in HTTP-only mode for SSL certificate generation..."
     docker-compose up -d nginx
-    
-    # Initialize SSL certificates
-    log_info "Initializing SSL certificates..."
     sleep 10
     
-    # Run certbot without TTY allocation
-    if [[ "$FORCE_NO_TTY" == "true" ]] || [[ ! -t 0 ]]; then
-        docker-compose run --rm -T certbot
+    # Test if domain is accessible before attempting SSL
+    log_info "Testing domain accessibility..."
+    if curl -f "http://$DOMAIN/.well-known/acme-challenge/" --connect-timeout 10 > /dev/null 2>&1 || curl -f "http://$DOMAIN/" --connect-timeout 10 > /dev/null 2>&1; then
+        log_success "Domain is accessible via HTTP"
+        
+        # Initialize SSL certificates
+        log_info "Attempting SSL certificate generation..."
+        
+        # Run certbot without TTY allocation
+        if [[ "$FORCE_NO_TTY" == "true" ]] || [[ ! -t 0 ]]; then
+            if docker-compose run --rm -T certbot; then
+                log_success "SSL certificates generated successfully"
+                
+                # Switch to SSL configuration
+                log_info "Switching to SSL configuration..."
+                cp nginx-ssl.conf nginx.conf
+                docker_exec_safe nginx nginx -s reload
+                log_success "SSL configuration activated"
+            else
+                log_warning "SSL certificate generation failed - continuing with HTTP-only mode"
+                log_info "You can manually setup SSL later using: ./setup-ssl-manual.sh $DOMAIN"
+            fi
+        else
+            if docker-compose run --rm certbot; then
+                log_success "SSL certificates generated successfully"
+                
+                # Switch to SSL configuration
+                log_info "Switching to SSL configuration..."
+                cp nginx-ssl.conf nginx.conf
+                docker_exec_safe nginx nginx -s reload
+                log_success "SSL configuration activated"
+            else
+                log_warning "SSL certificate generation failed - continuing with HTTP-only mode"
+                log_info "You can manually setup SSL later using: ./setup-ssl-manual.sh $DOMAIN"
+            fi
+        fi
     else
-        docker-compose run --rm certbot
+        log_warning "Domain not accessible via HTTP - skipping SSL certificate generation"
+        log_info "Please ensure:"
+        log_info "1. DNS A record points to this server"
+        log_info "2. Firewall allows incoming connections on port 80 and 443"
+        log_info "3. Domain has propagated (may take up to 48 hours)"
+        log_info "You can test SSL setup later using: ./diagnose.sh $DOMAIN"
+        log_info "Or manually setup SSL using: ./setup-ssl-manual.sh $DOMAIN"
     fi
-    
-    # Reload nginx with SSL
-    docker_exec_safe nginx nginx -s reload
     
     # Start backup service
     docker-compose up -d backup
