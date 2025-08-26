@@ -7,12 +7,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"time"
 )
 
-const (
-	ServerURL = "http://localhost:8080"
-)
+func getServerURL() string {
+	if url := os.Getenv("SERVER_URL"); url != "" {
+		return url
+	}
+	return "http://localhost:8080" // fallback
+}
 
 type PingResponse struct {
 	Timestamp int64 `json:"timestamp"`
@@ -46,11 +50,12 @@ func main() {
 func testLatency() {
 	const numPings = 5
 	var totalLatency time.Duration
+	serverURL := getServerURL()
 
 	for i := 0; i < numPings; i++ {
 		start := time.Now()
 
-		resp, err := http.Get(ServerURL + "/ping")
+		resp, err := http.Get(serverURL + "/ping")
 		if err != nil {
 			fmt.Printf("Error: %v\n", err)
 			return
@@ -72,12 +77,13 @@ func testLatency() {
 
 func testDownload() {
 	sizes := []int{1024 * 1024, 10 * 1024 * 1024} // 1MB, 10MB
+	serverURL := getServerURL()
 
 	for _, size := range sizes {
 		fmt.Printf("Testing download of %d bytes...\n", size)
 
 		start := time.Now()
-		resp, err := http.Get(fmt.Sprintf("%s/download?size=%d", ServerURL, size))
+		resp, err := http.Get(fmt.Sprintf("%s/download?size=%d", serverURL, size))
 		if err != nil {
 			fmt.Printf("Error: %v\n", err)
 			continue
@@ -100,6 +106,7 @@ func testDownload() {
 
 func testUpload() {
 	sizes := []int{1024 * 1024, 5 * 1024 * 1024} // 1MB, 5MB
+	serverURL := getServerURL()
 
 	for _, size := range sizes {
 		fmt.Printf("Testing upload of %d bytes...\n", size)
@@ -109,7 +116,7 @@ func testUpload() {
 		rand.Read(data)
 
 		start := time.Now()
-		resp, err := http.Post(ServerURL+"/upload", "application/octet-stream", bytes.NewReader(data))
+		resp, err := http.Post(serverURL+"/upload", "application/octet-stream", bytes.NewReader(data))
 		if err != nil {
 			fmt.Printf("Error: %v\n", err)
 			continue
@@ -127,7 +134,8 @@ func testUpload() {
 }
 
 func getIPInfo() {
-	resp, err := http.Get(ServerURL + "/ip")
+	serverURL := getServerURL()
+	resp, err := http.Get(serverURL + "/ip")
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return

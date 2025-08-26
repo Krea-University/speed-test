@@ -346,6 +346,9 @@ services:
       - LOG_LEVEL=\${LOG_LEVEL}
       - ADMIN_API_KEY=\${ADMIN_API_KEY}
       - RATE_LIMIT_ENABLED=\${RATE_LIMIT_ENABLED}
+      # External URLs Configuration
+      - SERVER_URL=https://${DOMAIN}
+      - SWAGGER_HOST=${DOMAIN}
       # Additional database connection parameters
       - DB_HOST=mysql
       - DB_PORT=3306

@@ -91,7 +91,13 @@ func New() *Server {
 	docs.SwaggerInfo.Title = "Krea Speed Test API"
 	docs.SwaggerInfo.Description = "A comprehensive speed test API with IP geolocation, rate limiting, and Ookla compatibility"
 	docs.SwaggerInfo.Version = config.Version
-	docs.SwaggerInfo.Host = "localhost:8080"
+	
+	// Set host from environment or use default
+	swaggerHost := os.Getenv("SWAGGER_HOST")
+	if swaggerHost == "" {
+		swaggerHost = "localhost:8080"
+	}
+	docs.SwaggerInfo.Host = swaggerHost
 	docs.SwaggerInfo.BasePath = "/"
 	docs.SwaggerInfo.Schemes = []string{"http", "https"}
 	r.PathPrefix("/swagger/").Handler(httpSwagger.WrapHandler)
