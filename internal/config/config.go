@@ -1,6 +1,11 @@
 // Package config handles application configuration and constants
 package config
 
+import (
+	"os"
+	"strconv"
+)
+
 const (
 	// DefaultDownloadSize is the default size for download speed tests (50 MiB)
 	DefaultDownloadSize = 50 * 1024 * 1024
@@ -19,4 +24,18 @@ const (
 
 	// HTTPTimeout is the timeout for external HTTP requests
 	HTTPTimeout = 5
+
+	// MaxConcurrentRequests is the maximum number of concurrent requests allowed
+	// Set to 0 to disable concurrent request limiting
+	MaxConcurrentRequests = 0
 )
+
+// GetMaxConcurrentRequests returns the maximum concurrent requests from environment or default
+func GetMaxConcurrentRequests() int {
+	if maxReqsStr := os.Getenv("MAX_CONCURRENT_REQUESTS"); maxReqsStr != "" {
+		if maxReqs, err := strconv.Atoi(maxReqsStr); err == nil && maxReqs > 0 {
+			return maxReqs
+		}
+	}
+	return MaxConcurrentRequests
+}

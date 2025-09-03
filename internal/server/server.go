@@ -48,34 +48,47 @@ func New() *Server {
 	// Create router with middleware
 	r := mux.NewRouter()
 
-	// Apply global middleware
+	// Initialize concurrent request limiter with configurable max requests
+	concurrentLimiter := middleware.NewConcurrentRequestLimiter(config.GetMaxConcurrentRequests())
+
+	// Apply global middleware (but skip for WebSocket)
 	r.Use(middleware.Logging)
 	r.Use(middleware.Security)
 	r.Use(middleware.CORS)
 
-	// Apply rate limiting if database is available
+	// Create a subrouter for non-WebSocket endpoints with concurrent limiting
+	api := r.PathPrefix("/").Subrouter()
+	api.Use(concurrentLimiter.Middleware)
+
+	// Apply rate limiting if database is available (to non-WebSocket endpoints)
 	if authService != nil {
-		r.Use(authService.RateLimit)
-		r.Use(authService.APIKeyAuth)
+		api.Use(authService.RateLimit)
+		api.Use(authService.APIKeyAuth)
 	}
 
-	// Public speed test endpoints
-	r.HandleFunc("/ping", h.Ping).Methods("GET")
-	r.HandleFunc("/download", h.Download).Methods("GET")
-	r.HandleFunc("/upload", h.Upload).Methods("POST")
-	r.HandleFunc("/ws", h.WebSocket).Methods("GET")
+	// Public speed test endpoints (with concurrent limiting)
+	api.HandleFunc("/ping", h.Ping).Methods("GET", "OPTIONS")
+	api.HandleFunc("/download", h.Download).Methods("GET", "OPTIONS")
+	api.HandleFunc("/upload", h.Upload).Methods("POST", "OPTIONS")
 
-	// Public information endpoints
-	r.HandleFunc("/ip", h.IP).Methods("GET")
-	r.HandleFunc("/healthz", h.Health).Methods("GET")
-	r.HandleFunc("/version", h.Version).Methods("GET")
-	r.HandleFunc("/config", h.Config).Methods("GET")
+	// WebSocket endpoint (without concurrent limiting to avoid hijacker issues)
+	r.HandleFunc("/ws", h.WebSocket).Methods("GET", "OPTIONS")
 
-	// Ookla-compatible endpoints (public)
-	r.HandleFunc("/result/{id}", h.GetSpeedTestOokla).Methods("GET")
+	// Public information endpoints (with concurrent limiting)
+	api.HandleFunc("/ip", h.IP).Methods("GET", "OPTIONS")
+	api.HandleFunc("/healthz", h.Health).Methods("GET", "OPTIONS")
+	api.HandleFunc("/version", h.Version).Methods("GET", "OPTIONS")
+	api.HandleFunc("/config", h.Config).Methods("GET", "OPTIONS")
 
-	// Admin endpoints (always available for monitoring)
-	admin := r.PathPrefix("/admin").Subrouter()
+	// Web interface endpoints (public HTML pages, with concurrent limiting)
+	api.HandleFunc("/speedtest.html", h.ServeSpeedTestHTML).Methods("GET", "OPTIONS")
+	api.HandleFunc("/new", h.ServeSpeedTestNewHTML).Methods("GET", "OPTIONS")
+
+	// Ookla-compatible endpoints (public, with concurrent limiting)
+	api.HandleFunc("/result/{id}", h.GetSpeedTestOokla).Methods("GET", "OPTIONS")
+
+	// Admin endpoints (always available for monitoring, with concurrent limiting)
+	admin := api.PathPrefix("/admin").Subrouter()
 	admin.HandleFunc("/", h.AdminDashboard).Methods("GET")
 	admin.HandleFunc("/api/stats", h.AdminStats).Methods("GET")
 	admin.HandleFunc("/api/recent-tests", h.AdminRecentTests).Methods("GET")
@@ -83,15 +96,15 @@ func New() *Server {
 
 	// API endpoints (require authentication if database is available)
 	if db != nil {
-		api := r.PathPrefix("/api").Subrouter()
-		api.HandleFunc("/tests", h.GetAllSpeedTests).Methods("GET")
-		api.HandleFunc("/tests", h.CreateSpeedTest).Methods("POST")
-		api.HandleFunc("/tests/{id}", h.GetSpeedTest).Methods("GET")
+		apiAuth := api.PathPrefix("/api").Subrouter()
+		apiAuth.HandleFunc("/tests", h.GetAllSpeedTests).Methods("GET")
+		apiAuth.HandleFunc("/tests", h.CreateSpeedTest).Methods("POST")
+		apiAuth.HandleFunc("/tests/{id}", h.GetSpeedTest).Methods("GET")
 	} // Swagger documentation endpoint
 	docs.SwaggerInfo.Title = "Krea Speed Test API"
 	docs.SwaggerInfo.Description = "A comprehensive speed test API with IP geolocation, rate limiting, and Ookla compatibility"
 	docs.SwaggerInfo.Version = config.Version
-	
+
 	// Set host from environment or use default
 	swaggerHost := os.Getenv("SWAGGER_HOST")
 	if swaggerHost == "" {
@@ -130,6 +143,12 @@ func (s *Server) Start() error {
 	go func() {
 		log.Printf("Speed Test Server starting on port %s", s.httpServer.Addr)
 		log.Printf("Version: %s", config.Version)
+		maxConcurrent := config.GetMaxConcurrentRequests()
+		if maxConcurrent == 0 {
+			log.Printf("Max concurrent requests: unlimited")
+		} else {
+			log.Printf("Max concurrent requests: %d", maxConcurrent)
+		}
 		log.Printf("Available endpoints:")
 		log.Printf("  GET  /ping      - Latency measurement")
 		log.Printf("  GET  /download  - Download speed test")
@@ -139,6 +158,8 @@ func (s *Server) Start() error {
 		log.Printf("  GET  /healthz   - Health check")
 		log.Printf("  GET  /version   - Application version")
 		log.Printf("  GET  /config    - Server configuration")
+		log.Printf("  GET  /speedtest.html - Main speed test interface")
+		log.Printf("  GET  /new       - Modern speed test interface")
 		log.Printf("  GET  /result/{id} - Ookla-compatible speed test results")
 
 		if s.db != nil {

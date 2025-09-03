@@ -46,6 +46,11 @@ func NewClientLimiter(globalLimit, perClientLimit int, timeWindow time.Duration)
 
 // IsAllowed checks if a request from the given IP is allowed
 func (cl *ClientLimiter) IsAllowed(ip string) bool {
+	// If both limits are 0, allow unlimited requests
+	if cl.globalLimit == 0 && cl.perClientLimit == 0 {
+		return true
+	}
+
 	cl.mu.Lock()
 	defer cl.mu.Unlock()
 

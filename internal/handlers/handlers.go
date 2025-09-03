@@ -52,7 +52,7 @@ func New(db *database.Service) *Handlers {
 	return &Handlers{
 		ipService:     ipservice.NewService(),
 		db:            db,
-		rateLimiter:   ratelimit.NewClientLimiter(100, 10, time.Minute), // 100 global, 10 per client per minute
+		rateLimiter:   ratelimit.NewClientLimiter(0, 0, time.Minute), // 0 means unlimited
 		metricsLogger: metricsLogger,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
@@ -653,4 +653,28 @@ func (h *Handlers) GetSpeedTestOokla(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(ooklaResponse)
+}
+
+// ServeSpeedTestHTML serves the main speed test HTML page
+// @Summary Serve main speed test interface
+// @Description Serves the main speedtest.html file for the speed test interface
+// @Tags Web Interface
+// @Produce text/html
+// @Success 200 {string} string "HTML content"
+// @Router /speedtest.html [get]
+func (h *Handlers) ServeSpeedTestHTML(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	http.ServeFile(w, r, "web/speedtest.html")
+}
+
+// ServeSpeedTestNewHTML serves the modern speed test HTML page
+// @Summary Serve modern speed test interface
+// @Description Serves the speedtest-new.html file for the modern speed test interface
+// @Tags Web Interface
+// @Produce text/html
+// @Success 200 {string} string "HTML content"
+// @Router /new [get]
+func (h *Handlers) ServeSpeedTestNewHTML(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	http.ServeFile(w, r, "web/speedtest-new.html")
 }
